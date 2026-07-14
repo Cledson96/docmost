@@ -26,14 +26,14 @@ Disponibilizar uma API pública no fork open source do Docmost que seja compatí
 
 ## Arquitetura
 
-Uma nova área `core/api-key` no servidor será responsável por criar, listar, renomear, revogar e validar chaves. Ela usará a tabela `apiKeys` já presente no schema do banco, mas terá serviços, DTOs e controllers próprios no código open source.
+Uma nova área `core/api-key` no servidor será responsável por criar, listar, renomear, revogar e validar chaves. Ela usará a tabela `apiKeys` e o `TokenService` já presentes no schema e no núcleo do projeto, mas terá serviços, DTOs e controllers próprios no código open source.
 
-O `JwtStrategy` continuará sendo a única porta de autenticação. Quando o token Bearer tiver o formato de chave da API, a estratégia delegará a validação ao novo serviço open source. Uma chave válida resolve o usuário e o workspace da chave; os controllers existentes recebem o mesmo contexto que recebem em sessões normais.
+O `JwtStrategy` continuará sendo a única porta de autenticação. Quando receber um token Bearer do tipo `api_key`, a estratégia delegará a validação ao novo serviço open source. Uma chave válida resolve o usuário e o workspace da chave; os controllers existentes recebem o mesmo contexto que recebem em sessões normais.
 
 ## Segurança
 
-- Chaves terão prefixo `dm_` e usarão entropia criptográfica.
-- A chave bruta será retornada somente na criação; o banco armazena somente hash seguro.
+- Chaves são JWTs assinados pelo segredo da aplicação e incluem somente o identificador da chave, do usuário e do workspace.
+- A chave bruta é retornada somente na criação; o banco armazena metadados e permite validar expiração e revogação em cada chamada.
 - Chaves revogadas, expiradas ou vinculadas a usuário/workspace inválido serão rejeitadas com `401`.
 - Uma chave herda as permissões atuais de seu proprietário. Nenhuma rota ignora CASL, restrições de página ou permissões de espaço.
 - Ações destrutivas continuam usando os mesmos DTOs e validações dos controllers existentes.
