@@ -44,6 +44,7 @@ For membership mutations, use a dedicated second test account:
 ```powershell
 $env:DOCMOST_SECOND_USER_ID = 'second-test-user-uuid'
 node scripts/verify-open-api-multi-user.mjs
+node scripts/verify-open-api-workspace-members.mjs
 ```
 
 ## Endpoints that need a separate actor or external delivery
