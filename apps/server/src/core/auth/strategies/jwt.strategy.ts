@@ -1,4 +1,4 @@
-import { Injectable, Logger, UnauthorizedException } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { Strategy } from 'passport-jwt';
 import { EnvironmentService } from '../../../integrations/environment/environment.service';
@@ -8,20 +8,21 @@ import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { SessionActivityService } from '../../session/session-activity.service';
 import { FastifyRequest } from 'fastify';
-import { extractBearerTokenFromHeader, isUserDisabled } from '../../../common/helpers';
-import { ModuleRef } from '@nestjs/core';
+import {
+  extractBearerTokenFromHeader,
+  isUserDisabled,
+} from '../../../common/helpers';
+import { ApiKeyService } from '../../api-key/api-key.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
-  private logger = new Logger('JwtStrategy');
-
   constructor(
     private userRepo: UserRepo,
     private workspaceRepo: WorkspaceRepo,
     private userSessionRepo: UserSessionRepo,
     private sessionActivityService: SessionActivityService,
     private readonly environmentService: EnvironmentService,
-    private moduleRef: ModuleRef,
+    private readonly apiKeyService: ApiKeyService,
   ) {
     super({
       jwtFromRequest: (req: FastifyRequest) => {
@@ -43,7 +44,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     }
 
     if (payload.type === JwtType.API_KEY) {
-      return this.validateApiKey(req, payload as JwtApiKeyPayload);
+      return this.apiKeyService.validateApiKey(payload as JwtApiKeyPayload);
     }
 
     if (payload.type !== JwtType.ACCESS) {
@@ -64,39 +65,21 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
     if ((payload as JwtPayload).sessionId) {
       const sessionId = (payload as JwtPayload).sessionId;
       const session = await this.userSessionRepo.findActiveById(sessionId);
-      if (!session || session.userId !== payload.sub || session.workspaceId !== payload.workspaceId) {
+      if (
+        !session ||
+        session.userId !== payload.sub ||
+        session.workspaceId !== payload.workspaceId
+      ) {
         throw new UnauthorizedException();
       }
       req.raw.sessionId = sessionId;
-      this.sessionActivityService.trackActivity(sessionId, payload.sub, payload.workspaceId);
+      this.sessionActivityService.trackActivity(
+        sessionId,
+        payload.sub,
+        payload.workspaceId,
+      );
     }
 
     return { user, workspace };
-  }
-
-  private async validateApiKey(req: any, payload: JwtApiKeyPayload) {
-    let ApiKeyModule: any;
-    let isApiKeyModuleReady = false;
-
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      ApiKeyModule = require('./../../../ee/api-key/api-key.service');
-      isApiKeyModuleReady = true;
-    } catch (err) {
-      this.logger.debug(
-        'API Key module requested but enterprise module not bundled in this build',
-      );
-      isApiKeyModuleReady = false;
-    }
-
-    if (isApiKeyModuleReady) {
-      const ApiKeyService = this.moduleRef.get(ApiKeyModule.ApiKeyService, {
-        strict: false,
-      });
-
-      return ApiKeyService.validateApiKey(payload);
-    }
-
-    throw new UnauthorizedException('Enterprise API Key module missing');
   }
 }
