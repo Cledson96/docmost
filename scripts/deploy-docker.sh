@@ -5,6 +5,8 @@ DEPLOY_PATH="${DEPLOY_PATH:-/opt/docmost}"
 APP_DOMAIN="${APP_DOMAIN:-wiki.cledson.com.br}"
 APP_PORT="${APP_PORT:-3000}"
 WEB_IMAGE="${WEB_IMAGE:?WEB_IMAGE é obrigatório}"
+GHCR_USER="${GHCR_USER:-}"
+GHCR_TOKEN="${GHCR_TOKEN:-}"
 CERTBOT_EMAIL="${CERTBOT_EMAIL:-}"
 PORT_SCAN_LIMIT="${PORT_SCAN_LIMIT:-20}"
 HEALTHCHECK_ATTEMPTS="${HEALTHCHECK_ATTEMPTS:-18}"
@@ -141,6 +143,9 @@ ensure_docker
 ensure_nginx_certbot
 select_runtime_port
 sudo_run sed -i "s/^APP_PORT=.*/APP_PORT=${APP_PORT}/" "${DEPLOY_PATH}/.env"
+if [ -n "${GHCR_USER}" ] && [ -n "${GHCR_TOKEN}" ]; then
+  printf '%s' "${GHCR_TOKEN}" | sudo_run docker login ghcr.io --username "${GHCR_USER}" --password-stdin
+fi
 compose pull
 compose up -d --remove-orphans
 publish_nginx
