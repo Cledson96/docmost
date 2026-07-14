@@ -38,6 +38,13 @@ node scripts/verify-open-api-system.mjs
 The verifiers create and clean up their own temporary data. Never commit a real
 API key.
 
+For membership mutations, use a dedicated second test account:
+
+```powershell
+$env:DOCMOST_SECOND_USER_ID = 'second-test-user-uuid'
+node scripts/verify-open-api-multi-user.mjs
+```
+
 ## Endpoints that need a separate actor or external delivery
 
 Workspace invitations, member role changes, group/space member mutations, and
