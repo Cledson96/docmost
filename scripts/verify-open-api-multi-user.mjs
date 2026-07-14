@@ -31,17 +31,16 @@ try {
   const suffix = `multi-user-${Date.now()}`;
   const space = await post("/spaces/create", { name: suffix, slug: suffix });
   spaceId = space.id;
-  await post("/spaces/members/add", {
-    spaceId,
-    role: "reader",
-    userIds: [secondUserId],
-    groupIds: [],
-  });
-  await post("/spaces/members/change-role", {
-    spaceId,
-    userId: secondUserId,
-    role: "writer",
-  });
+  await post(
+    "/spaces/members/add",
+    { spaceId, role: "reader", userIds: [secondUserId], groupIds: [] },
+    false,
+  );
+  await post(
+    "/spaces/members/change-role",
+    { spaceId, userId: secondUserId, role: "writer" },
+    false,
+  );
   await post(
     "/spaces/members/remove",
     { spaceId, userId: secondUserId },
@@ -49,7 +48,11 @@ try {
   );
   const group = await post("/groups/create", { name: suffix });
   groupId = group.id;
-  await post("/groups/members/add", { groupId, userIds: [secondUserId] });
+  await post(
+    "/groups/members/add",
+    { groupId, userIds: [secondUserId] },
+    false,
+  );
   await post(
     "/groups/members/remove",
     { groupId, userId: secondUserId },
