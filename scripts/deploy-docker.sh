@@ -150,7 +150,8 @@ if [ -n "${GHCR_USER}" ] && [ -n "${GHCR_TOKEN}" ]; then
   log "autenticando no GHCR como ${GHCR_USER}"
   printf '%s' "${GHCR_TOKEN}" | sudo_run docker login ghcr.io --username "${GHCR_USER}" --password-stdin
 else
-  log "GHCR_PULL_TOKEN não configurado; tentando pull anônimo"
+  log "GHCR_PULL_TOKEN não configurado; não é possível baixar a imagem privada"
+  exit 1
 fi
 log "baixando imagens"
 compose pull
