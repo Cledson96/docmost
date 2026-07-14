@@ -104,6 +104,10 @@ select_runtime_port() {
 
 publish_nginx() {
   local template="${DEPLOY_PATH}/deploy/nginx/reverse-proxy-http.conf"
+  if [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/fullchain.pem" ] && [ -f "/etc/letsencrypt/live/${APP_DOMAIN}/privkey.pem" ]; then
+    template="${DEPLOY_PATH}/deploy/nginx/reverse-proxy-https.conf"
+    log "certificado existente; publicando nginx com HTTPS para ${APP_DOMAIN}"
+  fi
   sudo_run sed -e "s|__APP_DOMAIN__|${APP_DOMAIN}|g" -e "s|__APP_PORT__|${APP_PORT}|g" "${template}" \
     | sudo_run tee "/etc/nginx/sites-available/${APP_DOMAIN}.conf" >/dev/null
   sudo_run ln -sf "/etc/nginx/sites-available/${APP_DOMAIN}.conf" "/etc/nginx/sites-enabled/${APP_DOMAIN}.conf"
