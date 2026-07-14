@@ -32,6 +32,7 @@ node scripts/verify-open-api-comments-attachments.mjs
 node scripts/verify-open-api-search-shares.mjs
 node scripts/verify-open-api-workspace-groups.mjs
 node scripts/verify-open-api-import-export.mjs
+node scripts/verify-open-api-system.mjs
 ```
 
 The verifiers create and clean up their own temporary data. Never commit a real
