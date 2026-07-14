@@ -139,17 +139,28 @@ healthcheck() {
 }
 
 sudo_run mkdir -p "${DEPLOY_PATH}"
+log "preparando Docker"
 ensure_docker
+log "preparando nginx e certbot"
 ensure_nginx_certbot
+log "selecionando porta"
 select_runtime_port
 sudo_run sed -i "s/^APP_PORT=.*/APP_PORT=${APP_PORT}/" "${DEPLOY_PATH}/.env"
 if [ -n "${GHCR_USER}" ] && [ -n "${GHCR_TOKEN}" ]; then
+  log "autenticando no GHCR como ${GHCR_USER}"
   printf '%s' "${GHCR_TOKEN}" | sudo_run docker login ghcr.io --username "${GHCR_USER}" --password-stdin
+else
+  log "GHCR_PULL_TOKEN não configurado; tentando pull anônimo"
 fi
+log "baixando imagens"
 compose pull
+log "subindo serviços"
 compose up -d --remove-orphans
+log "publicando nginx"
 publish_nginx
+log "validando aplicação"
 healthcheck
+log "configurando TLS"
 issue_certificate_if_needed
 sudo_run systemctl enable --now certbot.timer 2>/dev/null || true
 log "deploy concluído com ${WEB_IMAGE}"
