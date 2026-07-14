@@ -33,6 +33,7 @@ node scripts/verify-open-api-search-shares.mjs
 node scripts/verify-open-api-workspace-groups.mjs
 node scripts/verify-open-api-import-export.mjs
 node scripts/verify-open-api-system.mjs
+node scripts/verify-open-api-invites.mjs
 ```
 
 The verifiers create and clean up their own temporary data. Never commit a real
@@ -47,8 +48,7 @@ node scripts/verify-open-api-multi-user.mjs
 
 ## Endpoints that need a separate actor or external delivery
 
-Workspace invitations, member role changes, group/space member mutations, and
-email-based flows are already guarded controllers. They are not exercised by
-the automated verifiers because a safe test requires a second account and may
-send real email. API keys can call them when their creator has the required
-administrator permission.
+Workspace invitations use an `example.invalid` address and are revoked by the
+verifier. Member role changes and group/space member mutations are covered by
+the multi-user verifier using a temporary second account. API keys can call
+them when their creator has the required administrator permission.
