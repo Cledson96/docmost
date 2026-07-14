@@ -1,0 +1,142 @@
+name: Deploy production
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: docmost-production
+  cancel-in-progress: false
+
+env:
+  IMAGE: ghcr.io/cledson96/docmost
+
+jobs:
+  ci:
+    name: Validate
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.4.0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build workspace
+        run: pnpm build
+
+  build-push:
+    name: Build and push image
+    needs: ci
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Setup Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ github.sha }}
+            ${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to VPS
+    needs: build-push
+    runs-on: ubuntu-latest
+    environment: production
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_PATH: ${{ vars.DEPLOY_PATH || '/opt/docmost' }}
+      APP_DOMAIN: ${{ vars.APP_DOMAIN || 'wiki.cledson.com.br' }}
+      APP_PORT: ${{ vars.APP_PORT || '3000' }}
+      APP_URL: ${{ vars.APP_URL || 'https://wiki.cledson.com.br' }}
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
+      CERTBOT_EMAIL: ${{ vars.CERTBOT_EMAIL || secrets.CERTBOT_EMAIL || '' }}
+    steps:
+      - name: Checkout infrastructure
+        uses: actions/checkout@v4
+
+      - name: Prepare SSH
+        shell: bash
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -p "${VPS_PORT}" -H "${VPS_HOST}" >> ~/.ssh/known_hosts
+
+      - name: Generate production environment
+        shell: bash
+        run: |
+          umask 077
+          cat > /tmp/docmost.env <<EOF
+          WEB_IMAGE=${IMAGE}:${GITHUB_SHA}
+          APP_PORT=${APP_PORT}
+          APP_URL=${APP_URL}
+          APP_SECRET=${{ secrets.APP_SECRET }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          EOF
+          sed -i 's/^          //' /tmp/docmost.env
+
+      - name: Upload release infrastructure
+        shell: bash
+        run: |
+          tar -czf /tmp/docmost-infra.tgz deploy scripts
+          scp -i ~/.ssh/id_ed25519 -P "${VPS_PORT}" /tmp/docmost-infra.tgz "${VPS_USER}@${VPS_HOST}:/tmp/docmost-infra.tgz"
+          scp -i ~/.ssh/id_ed25519 -P "${VPS_PORT}" /tmp/docmost.env "${VPS_USER}@${VPS_HOST}:/tmp/docmost.env"
+
+      - name: Execute deployment
+        shell: bash
+        env:
+          GHCR_USER: ${{ github.actor }}
+          GHCR_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+        run: |
+          ssh -i ~/.ssh/id_ed25519 -p "${VPS_PORT}" "${VPS_USER}@${VPS_HOST}" \
+            "DEPLOY_PATH='${DEPLOY_PATH}' APP_DOMAIN='${APP_DOMAIN}' APP_PORT='${APP_PORT}' CERTBOT_EMAIL='${CERTBOT_EMAIL}' GHCR_USER='${GHCR_USER}' GHCR_TOKEN='${GHCR_TOKEN}' bash -s" <<'REMOTE'
+          set -euo pipefail
+          if [ "$(id -u)" -eq 0 ]; then run_root() { "$@"; }; else run_root() { sudo -n "$@"; }; fi
+          run_root mkdir -p "$DEPLOY_PATH"
+          run_root tar -xzf /tmp/docmost-infra.tgz -C "$DEPLOY_PATH"
+          run_root cp /tmp/docmost.env "$DEPLOY_PATH/.env"
+          run_root env DEPLOY_PATH="$DEPLOY_PATH" APP_DOMAIN="$APP_DOMAIN" APP_PORT="$APP_PORT" CERTBOT_EMAIL="$CERTBOT_EMAIL" WEB_IMAGE="$(grep '^WEB_IMAGE=' "$DEPLOY_PATH/.env" | cut -d= -f2-)" GHCR_USER="$GHCR_USER" GHCR_TOKEN="$GHCR_TOKEN" bash "$DEPLOY_PATH/scripts/deploy-docker.sh"
+          rm -f /tmp/docmost-infra.tgz /tmp/docmost.env
+          REMOTE
