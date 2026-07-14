@@ -46,10 +46,12 @@ users, workspace administration, and groups.
 
 ## Architecture
 
-Create open API controllers and DTOs that call the existing open-source
-services and repositories for spaces and pages. They must not duplicate domain
-logic or bypass permission checks. The controllers normalize the result to the
-official API envelope: `{ success, status, data }`.
+The open-source `SpaceController` and `PageController` already expose every
+endpoint in scope. Phase 1 makes these routes available to API keys through the
+shared JWT guard, so this phase must not create duplicate controllers or DTOs.
+It adds an executable compatibility harness and concise API reference proving
+the existing routes work with API keys. The global response interceptor already
+normalizes successful results to `{ success, status, data }`.
 
 List endpoints use cursor pagination with `limit` constrained to 1--100 and a
 default of 20. Cursor values are opaque base64 values. The response includes
