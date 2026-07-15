@@ -156,6 +156,36 @@ describe('template DTOs', () => {
         malformed.errors.some((error) => error.property === 'templateId'),
       ).toBe(true);
     });
+
+    it.each(['title', 'description', 'icon', 'content'])(
+      'rejects an explicit null %s',
+      async (property) => {
+        const { errors } = await validatePayload(UpdateTemplateDto, {
+          templateId: TEMPLATE_ID,
+          [property]: null,
+        });
+
+        expect(errors.some((error) => error.property === property)).toBe(true);
+      },
+    );
+
+    it('accepts a null spaceId to move a template to global scope', async () => {
+      const { errors } = await validatePayload(UpdateTemplateDto, {
+        templateId: TEMPLATE_ID,
+        spaceId: null,
+      });
+
+      expect(errors).toHaveLength(0);
+    });
+
+    it('rejects a malformed non-null spaceId', async () => {
+      const { errors } = await validatePayload(UpdateTemplateDto, {
+        templateId: TEMPLATE_ID,
+        spaceId: 'not-a-uuid',
+      });
+
+      expect(errors.some((error) => error.property === 'spaceId')).toBe(true);
+    });
   });
 
   describe('UseTemplateDto', () => {

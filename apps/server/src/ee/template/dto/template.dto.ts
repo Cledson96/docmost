@@ -49,9 +49,27 @@ export class CreateTemplateDto {
   spaceId?: string;
 }
 
-export class UpdateTemplateDto extends PartialType(CreateTemplateDto) {
+const rejectExplicitNull = ({ value }: TransformFnParams) =>
+  value === null ? Number.NaN : value;
+
+export class UpdateTemplateDto extends PartialType(CreateTemplateDto, {
+  skipNullProperties: false,
+}) {
   @IsUUID()
   templateId: string;
+
+  @Transform(rejectExplicitNull)
+  description?: string;
+
+  @Transform(rejectExplicitNull)
+  icon?: string;
+
+  @Transform(rejectExplicitNull)
+  content?: Record<string, unknown>;
+
+  @IsOptional()
+  @IsUUID()
+  spaceId?: string | null;
 }
 
 export class UseTemplateDto {
