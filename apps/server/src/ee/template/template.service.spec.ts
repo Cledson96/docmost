@@ -480,6 +480,73 @@ describe('TemplateService', () => {
       admin,
       'target-space',
     );
+    expect(spaceAbility.createForUser).toHaveBeenNthCalledWith(
+      3,
+      admin,
+      'target-space',
+    );
+    expect(canSpace).toHaveBeenNthCalledWith(
+      1,
+      SpaceCaslAction.Edit,
+      SpaceCaslSubject.Page,
+    );
+    expect(canSpace).toHaveBeenNthCalledWith(
+      2,
+      SpaceCaslAction.Edit,
+      SpaceCaslSubject.Page,
+    );
+    expect(canSpace).toHaveBeenNthCalledWith(
+      3,
+      SpaceCaslAction.Read,
+      SpaceCaslSubject.Page,
+    );
+  });
+
+  it('passes a null expected source scope when updating a global template', async () => {
+    const current = template();
+    templateRepo.findById
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(current);
+
+    await service.updateTemplate(
+      { templateId: current.id, title: 'Renamed' },
+      admin,
+      workspace,
+    );
+
+    expect(templateRepo.updateTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ title: 'Renamed' }),
+      current.id,
+      workspace.id,
+      null,
+    );
+  });
+
+  it('reauthorizes the refetched scope before returning an updated template', async () => {
+    const current = template({ spaceId: 'source-space' });
+    const concurrentlyMoved = template({ spaceId: 'inaccessible-space' });
+    templateRepo.findById
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(concurrentlyMoved);
+    canSpace.mockReturnValueOnce(true).mockReturnValueOnce(false);
+
+    await expect(
+      service.updateTemplate(
+        { templateId: current.id, title: 'Renamed' },
+        admin,
+        workspace,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(spaceAbility.createForUser).toHaveBeenNthCalledWith(
+      1,
+      admin,
+      'source-space',
+    );
+    expect(spaceAbility.createForUser).toHaveBeenNthCalledWith(
+      2,
+      admin,
+      'inaccessible-space',
+    );
   });
 
   it('requires workspace settings permission when moving a space template global', async () => {
@@ -541,6 +608,18 @@ describe('TemplateService', () => {
       'template-1',
       workspace.id,
       'space-1',
+    );
+  });
+
+  it('passes a null expected source scope when deleting a global template', async () => {
+    templateRepo.findById.mockResolvedValue(template());
+
+    await service.deleteTemplate('template-1', admin, workspace);
+
+    expect(templateRepo.deleteTemplate).toHaveBeenCalledWith(
+      'template-1',
+      workspace.id,
+      null,
     );
   });
 

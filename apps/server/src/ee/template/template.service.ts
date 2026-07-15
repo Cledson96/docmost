@@ -158,7 +158,14 @@ export class TemplateService {
       throw new ConflictException('Template scope changed. Please retry');
     }
 
-    return this.findTemplate(template.id, workspace.id);
+    const updatedTemplate = await this.findTemplate(template.id, workspace.id);
+    await this.authorizeTemplateScope(
+      updatedTemplate.spaceId,
+      user,
+      workspace,
+      false,
+    );
+    return updatedTemplate;
   }
 
   async deleteTemplate(templateId: string, user: User, workspace: Workspace) {
