@@ -115,11 +115,11 @@ export class TemplateService {
       'spaceId',
     ];
 
+    await this.authorizeTemplateScope(template.spaceId, user, workspace, true);
+
     if (!mutableFields.some((field) => dto[field] !== undefined)) {
       throw new BadRequestException('No fields to update');
     }
-
-    await this.authorizeTemplateScope(template.spaceId, user, workspace, true);
 
     if (dto.spaceId !== undefined && dto.spaceId !== null) {
       await this.findSpace(dto.spaceId, workspace.id);

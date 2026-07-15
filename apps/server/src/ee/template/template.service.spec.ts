@@ -271,6 +271,40 @@ describe('TemplateService', () => {
     ).rejects.toEqual(new BadRequestException('Invalid content format'));
   });
 
+  it.each([UserRole.ADMIN, UserRole.OWNER])(
+    'allows a workspace %s to create in an editable space when member templates are disabled',
+    async (role) => {
+      const privilegedUser = { id: `${role}-1`, role } as User;
+      spaceRepo.findById.mockResolvedValue({ id: 'space-1' } as never);
+      templateRepo.insertTemplate.mockResolvedValue({ id: 'new-template' });
+      templateRepo.findById.mockResolvedValue(
+        template({
+          id: 'new-template',
+          spaceId: 'space-1',
+          creatorId: privilegedUser.id,
+          lastUpdatedById: privilegedUser.id,
+        }),
+      );
+
+      await service.createTemplate(
+        { title: 'Privileged template', spaceId: 'space-1' },
+        privilegedUser,
+        workspace,
+      );
+
+      expect(canSpace).toHaveBeenCalledWith(
+        SpaceCaslAction.Edit,
+        SpaceCaslSubject.Page,
+      );
+      expect(templateRepo.insertTemplate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          spaceId: 'space-1',
+          creatorId: privilegedUser.id,
+        }),
+      );
+    },
+  );
+
   it('allows a normal member to create in an editable space when enabled', async () => {
     const enabledWorkspace = {
       ...workspace,
@@ -368,12 +402,26 @@ describe('TemplateService', () => {
     );
   });
 
-  it('rejects an update with no mutable fields', async () => {
+  it('returns 403 for an unauthorized update with no mutable fields', async () => {
+    templateRepo.findById.mockResolvedValue(template());
+    canWorkspace.mockReturnValue(false);
+
+    await expect(
+      service.updateTemplate({ templateId: 'template-1' }, member, workspace),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(templateRepo.updateTemplate).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for an authorized update with no mutable fields', async () => {
     templateRepo.findById.mockResolvedValue(template());
 
     await expect(
       service.updateTemplate({ templateId: 'template-1' }, admin, workspace),
     ).rejects.toBeInstanceOf(BadRequestException);
+    expect(canWorkspace).toHaveBeenCalledWith(
+      WorkspaceCaslAction.Manage,
+      WorkspaceCaslSubject.Settings,
+    );
     expect(templateRepo.updateTemplate).not.toHaveBeenCalled();
   });
 
