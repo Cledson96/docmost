@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   Injectable,
   NotFoundException,
@@ -22,6 +23,7 @@ import {
   WorkspaceCaslSubject,
 } from '../../core/casl/interfaces/workspace-ability.type';
 import { PageService } from '../../core/page/services/page.service';
+import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { jsonToNode, jsonToText } from '../../collaboration/collaboration.util';
 import {
   CreateTemplateDto,
@@ -42,6 +44,7 @@ export class TemplateService {
     private readonly spaceRepo: SpaceRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly pageService: PageService,
+    private readonly pageAccessService: PageAccessService,
     private readonly spaceAbilityFactory: SpaceAbilityFactory,
     private readonly workspaceAbilityFactory: WorkspaceAbilityFactory,
   ) {}
@@ -144,7 +147,16 @@ export class TemplateService {
       update.ydoc = normalized.ydoc;
     }
 
-    await this.templateRepo.updateTemplate(update, template.id, workspace.id);
+    const updated = await this.templateRepo.updateTemplate(
+      update,
+      template.id,
+      workspace.id,
+      template.spaceId,
+    );
+
+    if (!updated) {
+      throw new ConflictException('Template scope changed. Please retry');
+    }
 
     return this.findTemplate(template.id, workspace.id);
   }
@@ -152,7 +164,15 @@ export class TemplateService {
   async deleteTemplate(templateId: string, user: User, workspace: Workspace) {
     const template = await this.findTemplate(templateId, workspace.id);
     await this.authorizeTemplateScope(template.spaceId, user, workspace, true);
-    await this.templateRepo.deleteTemplate(template.id, workspace.id);
+    const deleted = await this.templateRepo.deleteTemplate(
+      template.id,
+      workspace.id,
+      template.spaceId,
+    );
+
+    if (!deleted) {
+      throw new ConflictException('Template scope changed. Please retry');
+    }
   }
 
   async useTemplate(dto: UseTemplateDto, user: User, workspace: Workspace) {
@@ -160,7 +180,20 @@ export class TemplateService {
     await this.authorizeTemplateScope(template.spaceId, user, workspace, false);
 
     await this.findSpace(dto.spaceId, workspace.id);
-    await this.authorizeSpaceForPageCreation(dto.spaceId, user);
+
+    if (dto.parentPageId) {
+      const parentPage = await this.pageService.findById(dto.parentPageId);
+      if (
+        !parentPage ||
+        parentPage.deletedAt ||
+        parentPage.spaceId !== dto.spaceId
+      ) {
+        throw new NotFoundException('Parent page not found');
+      }
+      await this.pageAccessService.validateCanEdit(parentPage, user);
+    } else {
+      await this.authorizeSpaceForPageCreation(dto.spaceId, user);
+    }
 
     return this.pageService.create(user.id, workspace.id, {
       title: template.title,

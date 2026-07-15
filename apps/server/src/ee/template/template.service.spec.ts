@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,7 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../../core/casl/interfaces/workspace-ability.type';
+import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { PageService } from '../../core/page/services/page.service';
 import { SpaceMemberRepo } from '../../database/repos/space/space-member.repo';
 import { SpaceRepo } from '../../database/repos/space/space.repo';
@@ -40,6 +42,11 @@ type SpaceMemberRepoMock = {
 
 type PageServiceMock = {
   create: jest.MockedFunction<PageService['create']>;
+  findById: jest.MockedFunction<PageService['findById']>;
+};
+
+type PageAccessServiceMock = {
+  validateCanEdit: jest.MockedFunction<PageAccessService['validateCanEdit']>;
 };
 
 type SpaceAbilityMock = {
@@ -82,6 +89,7 @@ describe('TemplateService', () => {
   let spaceRepo: SpaceRepoMock;
   let spaceMemberRepo: SpaceMemberRepoMock;
   let pageService: PageServiceMock;
+  let pageAccessService: PageAccessServiceMock;
   let spaceAbility: SpaceAbilityMock;
   let workspaceAbility: WorkspaceAbilityMock;
   let canSpace: jest.Mock<boolean, [SpaceCaslAction, SpaceCaslSubject]>;
@@ -95,12 +103,13 @@ describe('TemplateService', () => {
       findById: jest.fn(),
       findTemplates: jest.fn(),
       insertTemplate: jest.fn(),
-      updateTemplate: jest.fn(),
-      deleteTemplate: jest.fn(),
+      updateTemplate: jest.fn().mockResolvedValue(true as never),
+      deleteTemplate: jest.fn().mockResolvedValue(true as never),
     };
     spaceRepo = { findById: jest.fn() };
     spaceMemberRepo = { getUserSpaceIds: jest.fn() };
-    pageService = { create: jest.fn() };
+    pageService = { create: jest.fn(), findById: jest.fn() };
+    pageAccessService = { validateCanEdit: jest.fn() };
     canSpace = jest.fn().mockReturnValue(true);
     canWorkspace = jest.fn().mockReturnValue(true);
     spaceAbility = {
@@ -115,6 +124,7 @@ describe('TemplateService', () => {
       spaceRepo as unknown as SpaceRepo,
       spaceMemberRepo as unknown as SpaceMemberRepo,
       pageService as unknown as PageService,
+      pageAccessService as unknown as PageAccessService,
       spaceAbility as unknown as SpaceAbilityFactory,
       workspaceAbility as unknown as WorkspaceAbilityFactory,
     );
@@ -399,6 +409,7 @@ describe('TemplateService', () => {
       },
       current.id,
       workspace.id,
+      current.spaceId,
     );
   });
 
@@ -442,6 +453,7 @@ describe('TemplateService', () => {
       expect.not.objectContaining({ spaceId: expect.anything() }),
       current.id,
       workspace.id,
+      current.spaceId,
     );
   });
 
@@ -485,6 +497,23 @@ describe('TemplateService', () => {
     expect(templateRepo.updateTemplate).not.toHaveBeenCalled();
   });
 
+  it('returns 409 when the authorized source scope changes before update', async () => {
+    const current = template({ spaceId: 'source-space' });
+    templateRepo.findById.mockResolvedValue(current);
+    templateRepo.updateTemplate.mockResolvedValue(false as never);
+
+    await expect(
+      service.updateTemplate(
+        { templateId: current.id, title: 'Changed' },
+        admin,
+        workspace,
+      ),
+    ).rejects.toEqual(
+      new ConflictException('Template scope changed. Please retry'),
+    );
+    expect(templateRepo.findById).toHaveBeenCalledTimes(1);
+  });
+
   it('requires global source permission before moving into a space', async () => {
     templateRepo.findById.mockResolvedValue(template());
     canWorkspace.mockReturnValue(false);
@@ -511,6 +540,20 @@ describe('TemplateService', () => {
     expect(templateRepo.deleteTemplate).toHaveBeenCalledWith(
       'template-1',
       workspace.id,
+      'space-1',
+    );
+  });
+
+  it('returns 409 when the authorized source scope changes before delete', async () => {
+    templateRepo.findById.mockResolvedValue(
+      template({ spaceId: 'source-space' }),
+    );
+    templateRepo.deleteTemplate.mockResolvedValue(false as never);
+
+    await expect(
+      service.deleteTemplate('template-1', admin, workspace),
+    ).rejects.toEqual(
+      new ConflictException('Template scope changed. Please retry'),
     );
   });
 
@@ -519,6 +562,11 @@ describe('TemplateService', () => {
     const createdPage = { id: 'page-1' };
     templateRepo.findById.mockResolvedValue(source);
     spaceRepo.findById.mockResolvedValue({ id: 'destination-space' } as never);
+    pageService.findById.mockResolvedValue({
+      id: 'parent-page',
+      spaceId: 'destination-space',
+      deletedAt: null,
+    } as never);
     pageService.create.mockResolvedValue(createdPage as never);
 
     await expect(
@@ -537,6 +585,10 @@ describe('TemplateService', () => {
       SpaceCaslAction.Read,
       SpaceCaslSubject.Page,
     );
+    expect(pageAccessService.validateCanEdit).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'parent-page' }),
+      member,
+    );
     expect(pageService.create).toHaveBeenCalledWith(member.id, workspace.id, {
       title: source.title,
       icon: source.icon,
@@ -545,6 +597,98 @@ describe('TemplateService', () => {
       content,
       format: 'json',
     });
+  });
+
+  it('allows a space reader with page-level edit access to use a template under a parent', async () => {
+    const parent = {
+      id: 'parent-page',
+      spaceId: 'destination-space',
+      deletedAt: null,
+    };
+    templateRepo.findById.mockResolvedValue(template());
+    spaceRepo.findById.mockResolvedValue({ id: 'destination-space' } as never);
+    pageService.findById.mockResolvedValue(parent as never);
+    pageService.create.mockResolvedValue({ id: 'page-1' } as never);
+    canSpace.mockImplementation((action) => action === SpaceCaslAction.Read);
+
+    await expect(
+      service.useTemplate(
+        {
+          templateId: 'template-1',
+          spaceId: 'destination-space',
+          parentPageId: parent.id,
+        },
+        member,
+        workspace,
+      ),
+    ).resolves.toEqual({ id: 'page-1' });
+
+    expect(pageAccessService.validateCanEdit).toHaveBeenCalledWith(
+      parent,
+      member,
+    );
+    expect(spaceAbility.createForUser).not.toHaveBeenCalled();
+  });
+
+  it('denies a restricted parent when page-level edit access is missing', async () => {
+    const parent = {
+      id: 'parent-page',
+      spaceId: 'destination-space',
+      deletedAt: null,
+    };
+    templateRepo.findById.mockResolvedValue(template());
+    spaceRepo.findById.mockResolvedValue({ id: 'destination-space' } as never);
+    pageService.findById.mockResolvedValue(parent as never);
+    pageAccessService.validateCanEdit.mockRejectedValue(
+      new ForbiddenException(),
+    );
+
+    await expect(
+      service.useTemplate(
+        {
+          templateId: 'template-1',
+          spaceId: 'destination-space',
+          parentPageId: parent.id,
+        },
+        member,
+        workspace,
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pageService.create).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['missing', undefined],
+    [
+      'deleted',
+      {
+        id: 'parent-page',
+        spaceId: 'destination-space',
+        deletedAt: new Date(),
+      },
+    ],
+    [
+      'in another space',
+      { id: 'parent-page', spaceId: 'other-space', deletedAt: null },
+    ],
+  ])('returns 404 when the parent page is %s', async (_case, parent) => {
+    templateRepo.findById.mockResolvedValue(template());
+    spaceRepo.findById.mockResolvedValue({ id: 'destination-space' } as never);
+    pageService.findById.mockResolvedValue(parent as never);
+
+    await expect(
+      service.useTemplate(
+        {
+          templateId: 'template-1',
+          spaceId: 'destination-space',
+          parentPageId: 'parent-page',
+        },
+        member,
+        workspace,
+      ),
+    ).rejects.toEqual(new NotFoundException('Parent page not found'));
+    expect(pageAccessService.validateCanEdit).not.toHaveBeenCalled();
+    expect(pageService.create).not.toHaveBeenCalled();
   });
 
   it('returns 404 when the use destination does not exist in the workspace', async () => {
@@ -561,7 +705,7 @@ describe('TemplateService', () => {
     expect(pageService.create).not.toHaveBeenCalled();
   });
 
-  it('returns 403 when the use destination is read-only', async () => {
+  it('returns 403 when a root use destination is read-only', async () => {
     templateRepo.findById.mockResolvedValue(template());
     spaceRepo.findById.mockResolvedValue({ id: 'space-1' } as never);
     canSpace.mockReturnValue(false);
@@ -573,5 +717,6 @@ describe('TemplateService', () => {
         workspace,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(pageAccessService.validateCanEdit).not.toHaveBeenCalled();
   });
 });

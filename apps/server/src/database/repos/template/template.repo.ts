@@ -123,28 +123,44 @@ export class TemplateRepo {
     updatableTemplate: UpdatableTemplate,
     templateId: string,
     workspaceId: string,
+    expectedSpaceId: string | null,
     trx?: KyselyTransaction,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const db = dbOrTx(this.db, trx);
-    await db
+    let query = db
       .updateTable('templates')
       .set({ ...updatableTemplate, updatedAt: new Date() })
       .where('id', '=', templateId)
-      .where('workspaceId', '=', workspaceId)
-      .execute();
+      .where('workspaceId', '=', workspaceId);
+
+    query =
+      expectedSpaceId === null
+        ? query.where('spaceId', 'is', null)
+        : query.where('spaceId', '=', expectedSpaceId);
+
+    const result = await query.executeTakeFirst();
+    return result.numUpdatedRows > 0n;
   }
 
   async deleteTemplate(
     templateId: string,
     workspaceId: string,
+    expectedSpaceId: string | null,
     trx?: KyselyTransaction,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const db = dbOrTx(this.db, trx);
-    await db
+    let query = db
       .deleteFrom('templates')
       .where('id', '=', templateId)
-      .where('workspaceId', '=', workspaceId)
-      .execute();
+      .where('workspaceId', '=', workspaceId);
+
+    query =
+      expectedSpaceId === null
+        ? query.where('spaceId', 'is', null)
+        : query.where('spaceId', '=', expectedSpaceId);
+
+    const result = await query.executeTakeFirst();
+    return result.numDeletedRows > 0n;
   }
 
   withCreator(eb: ExpressionBuilder<DB, 'templates'>) {
