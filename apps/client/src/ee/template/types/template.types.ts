@@ -3,8 +3,8 @@ export interface ITemplate {
   title: string;
   description?: string;
   content?: any;
-  icon?: string;
-  spaceId?: string;
+  icon: string | null;
+  spaceId: string | null;
   workspaceId: string;
   creatorId: string;
   lastUpdatedById?: string;

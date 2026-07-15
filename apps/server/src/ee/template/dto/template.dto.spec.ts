@@ -157,7 +157,7 @@ describe('template DTOs', () => {
       ).toBe(true);
     });
 
-    it.each(['title', 'description', 'icon', 'content'])(
+    it.each(['title', 'description', 'content'])(
       'rejects an explicit null %s',
       async (property) => {
         const { errors } = await validatePayload(UpdateTemplateDto, {
@@ -168,6 +168,37 @@ describe('template DTOs', () => {
         expect(errors.some((error) => error.property === property)).toBe(true);
       },
     );
+
+    it('accepts an explicit null icon', async () => {
+      const { instance, errors } = await validatePayload(UpdateTemplateDto, {
+        templateId: TEMPLATE_ID,
+        icon: null,
+      });
+
+      expect(errors).toHaveLength(0);
+      expect(instance.icon).toBeNull();
+    });
+
+    it.each([42, false, {}, []])(
+      'rejects a non-string non-null icon value: %p',
+      async (icon) => {
+        const { errors } = await validatePayload(UpdateTemplateDto, {
+          templateId: TEMPLATE_ID,
+          icon,
+        });
+
+        expect(errors.some((error) => error.property === 'icon')).toBe(true);
+      },
+    );
+
+    it('rejects an icon longer than 255 characters', async () => {
+      const { errors } = await validatePayload(UpdateTemplateDto, {
+        templateId: TEMPLATE_ID,
+        icon: 'i'.repeat(256),
+      });
+
+      expect(errors.some((error) => error.property === 'icon')).toBe(true);
+    });
 
     it('accepts a null spaceId to move a template to global scope', async () => {
       const { errors } = await validatePayload(UpdateTemplateDto, {

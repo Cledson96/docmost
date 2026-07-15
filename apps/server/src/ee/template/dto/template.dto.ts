@@ -61,8 +61,7 @@ export class UpdateTemplateDto extends PartialType(CreateTemplateDto, {
   @Transform(rejectExplicitNull)
   description?: string;
 
-  @Transform(rejectExplicitNull)
-  icon?: string;
+  icon?: string | null;
 
   @Transform(rejectExplicitNull)
   content?: Record<string, unknown>;

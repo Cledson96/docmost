@@ -154,7 +154,7 @@ export default function TemplateEditor() {
       await updateMutationRef.current({
         templateId,
         title: titleRef.current,
-        icon: iconRef.current || undefined,
+        icon: iconRef.current,
         content: editor.getJSON(),
         spaceId: spaceIdRef.current,
       });

@@ -15,12 +15,14 @@ import {
   WorkspaceCaslAction,
   WorkspaceCaslSubject,
 } from '../../core/casl/interfaces/workspace-ability.type';
+import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { PageService } from '../../core/page/services/page.service';
 import { SpaceMemberRepo } from '../../database/repos/space/space-member.repo';
 import { SpaceRepo } from '../../database/repos/space/space.repo';
 import { TemplateRepo } from '../../database/repos/template/template.repo';
 import { Template, User, Workspace } from '../../database/types/entity.types';
+import { IAuditService } from '../../integrations/audit/audit.service';
 import { ListTemplatesDto } from './dto/template.dto';
 import { TemplateService } from './template.service';
 
@@ -47,6 +49,10 @@ type PageServiceMock = {
 
 type PageAccessServiceMock = {
   validateCanEdit: jest.MockedFunction<PageAccessService['validateCanEdit']>;
+};
+
+type AuditServiceMock = {
+  log: jest.MockedFunction<IAuditService['log']>;
 };
 
 type SpaceAbilityMock = {
@@ -92,6 +98,7 @@ describe('TemplateService', () => {
   let pageAccessService: PageAccessServiceMock;
   let spaceAbility: SpaceAbilityMock;
   let workspaceAbility: WorkspaceAbilityMock;
+  let auditService: AuditServiceMock;
   let canSpace: jest.Mock<boolean, [SpaceCaslAction, SpaceCaslSubject]>;
   let canWorkspace: jest.Mock<
     boolean,
@@ -118,6 +125,7 @@ describe('TemplateService', () => {
     workspaceAbility = {
       createForUser: jest.fn().mockReturnValue({ can: canWorkspace }),
     } as unknown as WorkspaceAbilityMock;
+    auditService = { log: jest.fn() };
 
     service = new TemplateService(
       templateRepo as unknown as TemplateRepo,
@@ -127,6 +135,7 @@ describe('TemplateService', () => {
       pageAccessService as unknown as PageAccessService,
       spaceAbility as unknown as SpaceAbilityFactory,
       workspaceAbility as unknown as WorkspaceAbilityFactory,
+      auditService as unknown as IAuditService,
     );
   });
 
@@ -413,6 +422,82 @@ describe('TemplateService', () => {
     );
   });
 
+  it('denies a member update in an editable space when member templates are disabled before no-op validation', async () => {
+    const current = template({ spaceId: 'space-1' });
+    templateRepo.findById.mockResolvedValue(current);
+
+    await expect(
+      service.updateTemplate({ templateId: current.id }, member, workspace),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(canSpace).toHaveBeenCalledWith(
+      SpaceCaslAction.Edit,
+      SpaceCaslSubject.Page,
+    );
+    expect(templateRepo.updateTemplate).not.toHaveBeenCalled();
+  });
+
+  it('allows a member update in an editable space when member templates are enabled', async () => {
+    const enabledWorkspace = {
+      ...workspace,
+      settings: { templates: { allowMemberTemplates: true } },
+    } as Workspace;
+    const current = template({ spaceId: 'space-1' });
+    const updated = template({ spaceId: 'space-1', title: 'Updated' });
+    templateRepo.findById
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(updated);
+
+    await expect(
+      service.updateTemplate(
+        { templateId: current.id, title: 'Updated' },
+        member,
+        enabledWorkspace,
+      ),
+    ).resolves.toBe(updated);
+    expect(templateRepo.updateTemplate).toHaveBeenCalled();
+  });
+
+  it('persists an explicit null icon', async () => {
+    const current = template({ spaceId: 'space-1' });
+    const updated = template({ spaceId: 'space-1', icon: null });
+    templateRepo.findById
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(updated);
+
+    await service.updateTemplate(
+      { templateId: current.id, icon: null },
+      admin,
+      workspace,
+    );
+
+    expect(templateRepo.updateTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({ icon: null }),
+      current.id,
+      workspace.id,
+      current.spaceId,
+    );
+  });
+
+  it('leaves the icon unchanged when it is omitted', async () => {
+    const current = template({ spaceId: 'space-1', icon: 'book' });
+    templateRepo.findById
+      .mockResolvedValueOnce(current)
+      .mockResolvedValueOnce(current);
+
+    await service.updateTemplate(
+      { templateId: current.id, title: 'Renamed' },
+      admin,
+      workspace,
+    );
+
+    expect(templateRepo.updateTemplate).toHaveBeenCalledWith(
+      expect.not.objectContaining({ icon: expect.anything() }),
+      current.id,
+      workspace.id,
+      current.spaceId,
+    );
+  });
+
   it('returns 403 for an unauthorized update with no mutable fields', async () => {
     templateRepo.findById.mockResolvedValue(template());
     canWorkspace.mockReturnValue(false);
@@ -611,6 +696,35 @@ describe('TemplateService', () => {
     );
   });
 
+  it('denies a member delete in an editable space when member templates are disabled', async () => {
+    templateRepo.findById.mockResolvedValue(template({ spaceId: 'space-1' }));
+
+    await expect(
+      service.deleteTemplate('template-1', member, workspace),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(canSpace).toHaveBeenCalledWith(
+      SpaceCaslAction.Edit,
+      SpaceCaslSubject.Page,
+    );
+    expect(templateRepo.deleteTemplate).not.toHaveBeenCalled();
+  });
+
+  it('allows a member delete in an editable space when member templates are enabled', async () => {
+    const enabledWorkspace = {
+      ...workspace,
+      settings: { templates: { allowMemberTemplates: true } },
+    } as Workspace;
+    templateRepo.findById.mockResolvedValue(template({ spaceId: 'space-1' }));
+
+    await service.deleteTemplate('template-1', member, enabledWorkspace);
+
+    expect(templateRepo.deleteTemplate).toHaveBeenCalledWith(
+      'template-1',
+      workspace.id,
+      'space-1',
+    );
+  });
+
   it('passes a null expected source scope when deleting a global template', async () => {
     templateRepo.findById.mockResolvedValue(template());
 
@@ -638,7 +752,11 @@ describe('TemplateService', () => {
 
   it('uses a template in an editable destination and forwards the parent', async () => {
     const source = template({ spaceId: 'source-space' });
-    const createdPage = { id: 'page-1' };
+    const createdPage = {
+      id: 'page-1',
+      title: '',
+      spaceId: 'destination-space',
+    };
     templateRepo.findById.mockResolvedValue(source);
     spaceRepo.findById.mockResolvedValue({ id: 'destination-space' } as never);
     pageService.findById.mockResolvedValue({
@@ -676,6 +794,34 @@ describe('TemplateService', () => {
       content,
       format: 'json',
     });
+    expect(auditService.log).toHaveBeenCalledWith({
+      event: AuditEvent.PAGE_CREATED,
+      resourceType: AuditResource.PAGE,
+      resourceId: createdPage.id,
+      spaceId: createdPage.spaceId,
+      changes: {
+        after: {
+          title: 'untitled',
+          spaceId: createdPage.spaceId,
+        },
+      },
+    });
+  });
+
+  it('does not audit when page creation from a template fails', async () => {
+    templateRepo.findById.mockResolvedValue(template());
+    spaceRepo.findById.mockResolvedValue({ id: 'destination-space' } as never);
+    const failure = new Error('page creation failed');
+    pageService.create.mockRejectedValue(failure);
+
+    await expect(
+      service.useTemplate(
+        { templateId: 'template-1', spaceId: 'destination-space' },
+        member,
+        workspace,
+      ),
+    ).rejects.toBe(failure);
+    expect(auditService.log).not.toHaveBeenCalled();
   });
 
   it('allows a space reader with page-level edit access to use a template under a parent', async () => {

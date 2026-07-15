@@ -2,6 +2,7 @@ import {
   BadRequestException,
   ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -11,6 +12,8 @@ import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
 import { TemplateRepo } from '@docmost/db/repos/template/template.repo';
 import { UserRole } from '../../common/helpers/types/permission';
+import { AuditEvent, AuditResource } from '../../common/events/audit-events';
+import { getPageTitle } from '../../common/helpers';
 import { createYdocFromJson } from '../../common/helpers/prosemirror/utils';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
 import WorkspaceAbilityFactory from '../../core/casl/abilities/workspace-ability.factory';
@@ -25,6 +28,10 @@ import {
 import { PageService } from '../../core/page/services/page.service';
 import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { jsonToNode, jsonToText } from '../../collaboration/collaboration.util';
+import {
+  AUDIT_SERVICE,
+  IAuditService,
+} from '../../integrations/audit/audit.service';
 import {
   CreateTemplateDto,
   ListTemplatesDto,
@@ -47,6 +54,7 @@ export class TemplateService {
     private readonly pageAccessService: PageAccessService,
     private readonly spaceAbilityFactory: SpaceAbilityFactory,
     private readonly workspaceAbilityFactory: WorkspaceAbilityFactory,
+    @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
   async listTemplates(dto: ListTemplatesDto, user: User, workspace: Workspace) {
@@ -202,7 +210,7 @@ export class TemplateService {
       await this.authorizeSpaceForPageCreation(dto.spaceId, user);
     }
 
-    return this.pageService.create(user.id, workspace.id, {
+    const page = await this.pageService.create(user.id, workspace.id, {
       title: template.title,
       icon: template.icon,
       spaceId: dto.spaceId,
@@ -210,6 +218,21 @@ export class TemplateService {
       content: (template.content ?? EMPTY_DOC) as object,
       format: 'json',
     });
+
+    this.auditService.log({
+      event: AuditEvent.PAGE_CREATED,
+      resourceType: AuditResource.PAGE,
+      resourceId: page.id,
+      spaceId: page.spaceId,
+      changes: {
+        after: {
+          title: getPageTitle(page.title),
+          spaceId: page.spaceId,
+        },
+      },
+    });
+
+    return page;
   }
 
   private async findTemplate(templateId: string, workspaceId: string) {
@@ -244,6 +267,13 @@ export class TemplateService {
         user,
         edit ? SpaceCaslAction.Edit : SpaceCaslAction.Read,
       );
+      if (
+        edit &&
+        user.role === UserRole.MEMBER &&
+        !this.memberTemplatesEnabled(workspace)
+      ) {
+        throw new ForbiddenException();
+      }
       return;
     }
 
