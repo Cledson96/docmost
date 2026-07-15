@@ -19,6 +19,8 @@ async function bootstrap() {
   const app = await NestFactory.create<NestFastifyApplication>(
     AppModule,
     new FastifyAdapter({
+      // Rich pages and templates can contain large tables, code blocks and diagrams.
+      bodyLimit: 10 * 1024 * 1024,
       trustProxy: true,
       routerOptions: {
         maxParamLength: 1000,
