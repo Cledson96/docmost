@@ -79,6 +79,7 @@ jobs:
     name: Deploy to VPS
     needs: build-push
     runs-on: ubuntu-latest
+    environment: production
     permissions:
       contents: read
       packages: read
