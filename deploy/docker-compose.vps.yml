@@ -6,8 +6,6 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    env_file:
-      - .env
     environment:
       APP_URL: ${APP_URL:?defina APP_URL}
       APP_SECRET: ${APP_SECRET:?defina APP_SECRET}
