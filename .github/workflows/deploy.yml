@@ -79,7 +79,6 @@ jobs:
     name: Deploy to VPS
     needs: build-push
     runs-on: ubuntu-latest
-    environment: production
     permissions:
       contents: read
       packages: read
@@ -92,6 +91,10 @@ jobs:
       VPS_USER: ${{ secrets.VPS_USER }}
       VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
       CERTBOT_EMAIL: ${{ vars.CERTBOT_EMAIL || secrets.CERTBOT_EMAIL || '' }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      AI_DRIVER: ${{ vars.AI_DRIVER || 'openai' }}
+      AI_COMPLETION_MODEL: ${{ vars.AI_COMPLETION_MODEL || 'gpt-4o-mini' }}
+      AI_CHAT_MODEL: ${{ vars.AI_CHAT_MODEL || 'gpt-4o-mini' }}
     steps:
       - name: Checkout infrastructure
         uses: actions/checkout@v4
@@ -108,21 +111,16 @@ jobs:
         shell: bash
         run: |
           umask 077
-          AI_DRIVER_VAL="${{ vars.AI_DRIVER || 'openai' }}"
-          OPENAI_KEY="${{ secrets.OPENAI_API_KEY }}"
-          if [ -n "$OPENAI_KEY" ] && [ -z "$AI_DRIVER_VAL" ]; then
-            AI_DRIVER_VAL="openai"
-          fi
           cat > /tmp/docmost.env <<EOF
           WEB_IMAGE=${IMAGE}:${GITHUB_SHA}
           APP_PORT=${APP_PORT}
           APP_URL=${APP_URL}
           APP_SECRET=${{ secrets.APP_SECRET }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          AI_DRIVER=${AI_DRIVER_VAL}
-          AI_COMPLETION_MODEL=${{ vars.AI_COMPLETION_MODEL || 'gpt-4o-mini' }}
-          AI_CHAT_MODEL=${{ vars.AI_CHAT_MODEL || 'gpt-4o-mini' }}
-          OPENAI_API_KEY=${OPENAI_KEY}
+          AI_DRIVER=${AI_DRIVER}
+          AI_COMPLETION_MODEL=${AI_COMPLETION_MODEL}
+          AI_CHAT_MODEL=${AI_CHAT_MODEL}
+          OPENAI_API_KEY=${OPENAI_API_KEY}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || '' }}
           OLLAMA_API_URL=${{ vars.OLLAMA_API_URL || '' }}
           EOF
