@@ -6,8 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { generateText, streamText, tool } from 'ai';
-import { z } from 'zod';
+import { generateText, streamText, tool, jsonSchema } from 'ai';
 import { AiProviderFactory } from '../ai/ai-provider.factory';
 import { sql } from 'kysely';
 import { PageService } from '../../core/page/services/page.service';
@@ -318,29 +317,43 @@ export class AiChatService {
         description:
           'Edit, update, append to, or replace the content of a document page. ' +
           'Use this tool whenever the user asks you to edit a page, add text, rewrite content, insert code, or update a document page.',
-        parameters: z.object({
-          pageId: z.string().describe('The ID of the page to edit'),
-          content: z.string().describe('The markdown content to insert or update'),
-          operation: z
-            .enum(['append', 'prepend', 'replace'])
-            .default('append')
-            .describe(
-              'append (add to bottom), prepend (add to top), or replace (overwrite entire document)',
-            ),
+        parameters: jsonSchema<{
+          pageId: string;
+          content: string;
+          operation?: 'append' | 'prepend' | 'replace';
+        }>({
+          type: 'object',
+          properties: {
+            pageId: {
+              type: 'string',
+              description: 'The ID of the page to edit',
+            },
+            content: {
+              type: 'string',
+              description: 'The markdown content to insert or update',
+            },
+            operation: {
+              type: 'string',
+              enum: ['append', 'prepend', 'replace'],
+              description:
+                'append (add to bottom), prepend (add to top), or replace (overwrite entire document)',
+            },
+          },
+          required: ['pageId', 'content'],
         }),
         execute: async ({ pageId, content, operation }: any) => {
           try {
             await this.pageService.updatePageContent(
               pageId,
               content,
-              operation as ContentOperation,
+              (operation || 'append') as ContentOperation,
               'markdown',
               user,
             );
             return {
               success: true,
               pageId,
-              operation,
+              operation: operation || 'append',
               message: 'Page content updated successfully',
             };
           } catch (err: any) {
@@ -350,9 +363,13 @@ export class AiChatService {
       }),
       update_page_title: (tool as any)({
         description: 'Update the title of a document page.',
-        parameters: z.object({
-          pageId: z.string().describe('The ID of the page'),
-          title: z.string().describe('The new title for the page'),
+        parameters: jsonSchema<{ pageId: string; title: string }>({
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'The ID of the page' },
+            title: { type: 'string', description: 'The new title for the page' },
+          },
+          required: ['pageId', 'title'],
         }),
         execute: async ({ pageId, title }: any) => {
           try {
