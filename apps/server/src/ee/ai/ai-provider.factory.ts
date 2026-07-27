@@ -56,14 +56,14 @@ export class AiProviderFactory {
           apiKey: this.envService.getOpenAiApiKey(),
           baseURL: this.envService.getOpenAiApiUrl() || undefined,
         });
-        return openai(effectiveModel);
+        return openai.chat(effectiveModel);
       }
       case 'openai-compatible': {
         const openai = createOpenAI({
           apiKey: this.envService.getOpenAiApiKey(),
           baseURL: this.envService.getOpenAiApiUrl(),
         });
-        return openai(effectiveModel);
+        return openai.chat(effectiveModel);
       }
       case 'gemini': {
         const google = createGoogleGenerativeAI({
