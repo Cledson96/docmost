@@ -6,7 +6,7 @@ import {
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { generateText, streamText, tool, jsonSchema } from 'ai';
+import { generateText, streamText } from 'ai';
 import { AiProviderFactory } from '../ai/ai-provider.factory';
 import { sql } from 'kysely';
 import { PageService } from '../../core/page/services/page.service';
@@ -312,96 +312,12 @@ export class AiChatService {
 
     const systemPrompt = this.buildSystemPrompt(contextText, params.contextPageId);
 
-    const tools: Record<string, any> = {
-      edit_page: {
-        description:
-          'Edit, update, append to, or replace the content of a document page. ' +
-          'Use this tool whenever the user asks you to edit a page, add text, rewrite content, insert code, or update a document page.',
-        parameters: jsonSchema<{
-          pageId: string;
-          content: string;
-          operation?: 'append' | 'prepend' | 'replace';
-        }>({
-          type: 'object',
-          properties: {
-            pageId: {
-              type: 'string',
-              description: 'The ID of the page to edit',
-            },
-            content: {
-              type: 'string',
-              description: 'The markdown content to insert or update',
-            },
-            operation: {
-              type: 'string',
-              enum: ['append', 'prepend', 'replace'],
-              description:
-                'append (add to bottom), prepend (add to top), or replace (overwrite entire document)',
-            },
-          },
-          required: ['pageId', 'content'],
-        }),
-        execute: async ({
-          pageId,
-          content,
-          operation,
-        }: {
-          pageId: string;
-          content: string;
-          operation?: 'append' | 'prepend' | 'replace';
-        }) => {
-          try {
-            await this.pageService.updatePageContent(
-              pageId,
-              content,
-              (operation || 'append') as ContentOperation,
-              'markdown',
-              user,
-            );
-            return {
-              success: true,
-              pageId,
-              operation: operation || 'append',
-              message: 'Page content updated successfully',
-            };
-          } catch (err: any) {
-            return { success: false, error: err.message };
-          }
-        },
-      },
-      update_page_title: {
-        description: 'Update the title of a document page.',
-        parameters: jsonSchema<{ pageId: string; title: string }>({
-          type: 'object',
-          properties: {
-            pageId: { type: 'string', description: 'The ID of the page' },
-            title: { type: 'string', description: 'The new title for the page' },
-          },
-          required: ['pageId', 'title'],
-        }),
-        execute: async ({
-          pageId,
-          title,
-        }: {
-          pageId: string;
-          title: string;
-        }) => {
-          try {
-            await this.pageRepo.updatePage({ title, updatedAt: new Date() }, pageId);
-            return { success: true, pageId, title };
-          } catch (err: any) {
-            return { success: false, error: err.message };
-          }
-        },
-      },
-    };
-
-    // Stream the AI response with tools
+    // Stream the AI response (without SDK tools due to Zod v4 incompatibility)
+    // Instead, editing is handled via command parsing from the AI response text
     const result = streamText({
       model: this.providerFactory.getChatModel(),
       system: systemPrompt,
       messages,
-      tools,
     });
 
     let fullResponse = '';
@@ -411,21 +327,11 @@ export class AiChatService {
         const text = chunk.textDelta ?? chunk.text ?? '';
         fullResponse += text;
         yield { type: 'content', text };
-      } else if (chunk.type === 'tool-call') {
-        yield {
-          type: 'tool_call',
-          id: chunk.toolCallId,
-          name: chunk.toolName,
-          args: (chunk.args ?? chunk.input ?? {}) as Record<string, unknown>,
-        };
-      } else if (chunk.type === 'tool-result') {
-        yield {
-          type: 'tool_result',
-          id: chunk.toolCallId,
-          result: chunk.result ?? chunk.output,
-        };
       }
     }
+
+    // Parse and execute edit commands from the AI response
+    await this.parseAndExecuteEditCommands(fullResponse, user);
 
     // Save assistant message
     const assistantMsg = await this.db
@@ -456,16 +362,79 @@ export class AiChatService {
     yield { type: 'done', messageId: assistantMsg.id };
   }
 
+  /**
+   * Parse edit commands from AI response text and execute them.
+   * Commands follow the format:
+   * :::EDIT_PAGE:::
+   * {"pageId":"...","content":"...","operation":"append|prepend|replace"}
+   * :::END_EDIT:::
+   *
+   * Or for title updates:
+   * :::UPDATE_TITLE:::
+   * {"pageId":"...","title":"..."}
+   * :::END_TITLE:::
+   */
+  private async parseAndExecuteEditCommands(
+    responseText: string,
+    user: User,
+  ): Promise<void> {
+    // Parse EDIT_PAGE commands
+    const editRegex = /:::EDIT_PAGE:::\s*\n([\s\S]*?)\n:::END_EDIT:::/g;
+    let match: RegExpExecArray | null;
+
+    while ((match = editRegex.exec(responseText)) !== null) {
+      try {
+        const command = JSON.parse(match[1].trim());
+        if (command.pageId && command.content) {
+          await this.pageService.updatePageContent(
+            command.pageId,
+            command.content,
+            (command.operation || 'append') as ContentOperation,
+            'markdown',
+            user,
+          );
+        }
+      } catch {
+        // Skip malformed commands
+      }
+    }
+
+    // Parse UPDATE_TITLE commands
+    const titleRegex = /:::UPDATE_TITLE:::\s*\n([\s\S]*?)\n:::END_TITLE:::/g;
+
+    while ((match = titleRegex.exec(responseText)) !== null) {
+      try {
+        const command = JSON.parse(match[1].trim());
+        if (command.pageId && command.title) {
+          await this.pageRepo.updatePage(
+            { title: command.title, updatedAt: new Date() },
+            command.pageId,
+          );
+        }
+      } catch {
+        // Skip malformed commands
+      }
+    }
+  }
+
   private buildSystemPrompt(context: string, currentContextPageId?: string): string {
     let prompt =
       'You are a helpful AI assistant integrated into a document management system called Docmost. ' +
-      'You have full capabilities to edit, update, append to, or modify document pages directly in real-time. ' +
-      'When the user asks you to edit, update, add text to, format, or draw diagrams in a page, ALWAYS use the `edit_page` tool with the page ID.\n\n' +
+      'You can edit document pages directly. When the user asks you to edit, update, add text to, format, or modify a page, ' +
+      'include an edit command block in your response using this exact format:\n\n' +
+      ':::EDIT_PAGE:::\n' +
+      '{"pageId":"PAGE_ID_HERE","content":"MARKDOWN_CONTENT_HERE","operation":"append"}\n' +
+      ':::END_EDIT:::\n\n' +
+      'The "operation" can be "append" (add to bottom), "prepend" (add to top), or "replace" (overwrite entire document).\n' +
+      'To update a page title, use:\n\n' +
+      ':::UPDATE_TITLE:::\n' +
+      '{"pageId":"PAGE_ID_HERE","title":"NEW_TITLE_HERE"}\n' +
+      ':::END_TITLE:::\n\n' +
       'You are capable of writing rich Markdown syntax that Docmost renders into interactive UI elements:\n' +
-      '- **Mermaid Diagrams**: Use ```mermaid code blocks (e.g. ```mermaid\\ngraph TD;\\n  A-->B;\\n```) for flowcharts, sequence diagrams, mindmaps, architecture diagrams, ERDs, and gantt charts.\n' +
+      '- **Mermaid Diagrams**: Use ```mermaid code blocks for flowcharts, sequence diagrams, mindmaps, ERDs, and gantt charts.\n' +
       '- **Tables**: Use standard Markdown table syntax (| Header 1 | Header 2 |).\n' +
       '- **Code Blocks**: Use fenced code blocks with language identifiers (e.g., ```typescript, ```yaml, ```json, ```python).\n' +
-      '- **Callouts/Alerts**: Use blockquotes with alert syntax (e.g., > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).\n' +
+      '- **Callouts/Alerts**: Use blockquotes with alert syntax (> [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).\n' +
       '- **Task Lists**: Use `- [ ]` and `- [x]` for interactive task checklists.\n' +
       'Format your responses using Markdown when appropriate.';
 
