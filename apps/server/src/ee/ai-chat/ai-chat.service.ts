@@ -313,7 +313,7 @@ export class AiChatService {
     const systemPrompt = this.buildSystemPrompt(contextText, params.contextPageId);
 
     const tools: Record<string, any> = {
-      edit_page: (tool as any)({
+      edit_page: {
         description:
           'Edit, update, append to, or replace the content of a document page. ' +
           'Use this tool whenever the user asks you to edit a page, add text, rewrite content, insert code, or update a document page.',
@@ -341,7 +341,15 @@ export class AiChatService {
           },
           required: ['pageId', 'content'],
         }),
-        execute: async ({ pageId, content, operation }: any) => {
+        execute: async ({
+          pageId,
+          content,
+          operation,
+        }: {
+          pageId: string;
+          content: string;
+          operation?: 'append' | 'prepend' | 'replace';
+        }) => {
           try {
             await this.pageService.updatePageContent(
               pageId,
@@ -360,8 +368,8 @@ export class AiChatService {
             return { success: false, error: err.message };
           }
         },
-      }),
-      update_page_title: (tool as any)({
+      },
+      update_page_title: {
         description: 'Update the title of a document page.',
         parameters: jsonSchema<{ pageId: string; title: string }>({
           type: 'object',
@@ -371,7 +379,13 @@ export class AiChatService {
           },
           required: ['pageId', 'title'],
         }),
-        execute: async ({ pageId, title }: any) => {
+        execute: async ({
+          pageId,
+          title,
+        }: {
+          pageId: string;
+          title: string;
+        }) => {
           try {
             await this.pageRepo.updatePage({ title, updatedAt: new Date() }, pageId);
             return { success: true, pageId, title };
@@ -379,7 +393,7 @@ export class AiChatService {
             return { success: false, error: err.message };
           }
         },
-      }),
+      },
     };
 
     // Stream the AI response with tools
