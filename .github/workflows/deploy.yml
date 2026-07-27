@@ -114,6 +114,12 @@ jobs:
           APP_URL=${APP_URL}
           APP_SECRET=${{ secrets.APP_SECRET }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          AI_DRIVER=${{ vars.AI_DRIVER || 'openai' }}
+          AI_COMPLETION_MODEL=${{ vars.AI_COMPLETION_MODEL || 'gpt-4o-mini' }}
+          AI_CHAT_MODEL=${{ vars.AI_CHAT_MODEL || 'gpt-4o-mini' }}
+          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || '' }}
+          OLLAMA_API_URL=${{ vars.OLLAMA_API_URL || '' }}
           EOF
           sed -i 's/^          //' /tmp/docmost.env
 
