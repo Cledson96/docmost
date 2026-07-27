@@ -21,7 +21,7 @@ export class AiProviderFactory {
     return this.createModel(this.envService.getAiChatModel());
   }
 
-  private createModel(modelId: string) {
+  private createModel(modelId?: string) {
     const driver = this.envService.getAiDriver();
 
     if (!driver) {
@@ -30,32 +30,41 @@ export class AiProviderFactory {
       );
     }
 
+    const defaultModel =
+      driver === 'gemini'
+        ? 'gemini-1.5-flash'
+        : driver === 'ollama'
+          ? 'llama3.2'
+          : 'gpt-4o-mini';
+
+    const effectiveModel = modelId || defaultModel;
+
     switch (driver) {
       case 'openai': {
         const openai = createOpenAI({
           apiKey: this.envService.getOpenAiApiKey(),
           baseURL: this.envService.getOpenAiApiUrl() || undefined,
         });
-        return openai(modelId);
+        return openai(effectiveModel);
       }
       case 'openai-compatible': {
         const openai = createOpenAI({
           apiKey: this.envService.getOpenAiApiKey(),
           baseURL: this.envService.getOpenAiApiUrl(),
         });
-        return openai(modelId);
+        return openai(effectiveModel);
       }
       case 'gemini': {
         const google = createGoogleGenerativeAI({
           apiKey: this.envService.getGeminiApiKey(),
         });
-        return google(modelId);
+        return google(effectiveModel);
       }
       case 'ollama': {
         const ollama = createOllama({
           baseURL: this.envService.getOllamaApiUrl(),
         });
-        return ollama(modelId);
+        return ollama(effectiveModel);
       }
       default:
         throw new BadRequestException(`Unknown AI driver: ${driver}`);

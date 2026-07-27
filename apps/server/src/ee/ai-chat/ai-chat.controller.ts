@@ -114,6 +114,7 @@ export class AiChatController {
       }
       res.write('data: [DONE]\n\n');
     } catch (error: any) {
+      console.error('[AiChatController] Error sending chat message:', error);
       const message = error?.message || 'An error occurred';
       const code = error?.status || error?.statusCode;
       res.write(
