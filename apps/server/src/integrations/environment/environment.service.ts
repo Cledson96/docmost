@@ -279,7 +279,12 @@ export class EnvironmentService {
   }
 
   getAiDriver(): string {
-    return this.configService.get<string>('AI_DRIVER');
+    const driver = this.configService.get<string>('AI_DRIVER');
+    if (driver) return driver;
+    if (this.getOpenAiApiKey()) return 'openai';
+    if (this.getGeminiApiKey()) return 'gemini';
+    if (this.configService.get<string>('OLLAMA_API_URL')) return 'ollama';
+    return '';
   }
 
   getAiEmbeddingModel(): string {

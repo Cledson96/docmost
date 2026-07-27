@@ -10,7 +10,18 @@ export class AiProviderFactory {
   constructor(private readonly envService: EnvironmentService) {}
 
   isConfigured(): boolean {
-    return !!this.envService.getAiDriver();
+    const driver = this.envService.getAiDriver();
+    if (!driver) return false;
+    if (driver === 'openai' || driver === 'openai-compatible') {
+      return !!this.envService.getOpenAiApiKey();
+    }
+    if (driver === 'gemini') {
+      return !!this.envService.getGeminiApiKey();
+    }
+    if (driver === 'ollama') {
+      return !!this.envService.getOllamaApiUrl();
+    }
+    return false;
   }
 
   getCompletionModel(): LanguageModel {

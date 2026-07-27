@@ -108,16 +108,21 @@ jobs:
         shell: bash
         run: |
           umask 077
+          AI_DRIVER_VAL="${{ vars.AI_DRIVER || 'openai' }}"
+          OPENAI_KEY="${{ secrets.OPENAI_API_KEY }}"
+          if [ -n "$OPENAI_KEY" ] && [ -z "$AI_DRIVER_VAL" ]; then
+            AI_DRIVER_VAL="openai"
+          fi
           cat > /tmp/docmost.env <<EOF
           WEB_IMAGE=${IMAGE}:${GITHUB_SHA}
           APP_PORT=${APP_PORT}
           APP_URL=${APP_URL}
           APP_SECRET=${{ secrets.APP_SECRET }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          AI_DRIVER=${{ vars.AI_DRIVER || 'openai' }}
+          AI_DRIVER=${AI_DRIVER_VAL}
           AI_COMPLETION_MODEL=${{ vars.AI_COMPLETION_MODEL || 'gpt-4o-mini' }}
           AI_CHAT_MODEL=${{ vars.AI_CHAT_MODEL || 'gpt-4o-mini' }}
-          OPENAI_API_KEY=${{ secrets.OPENAI_API_KEY }}
+          OPENAI_API_KEY=${OPENAI_KEY}
           GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || '' }}
           OLLAMA_API_URL=${{ vars.OLLAMA_API_URL || '' }}
           EOF
