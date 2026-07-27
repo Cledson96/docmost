@@ -31,18 +31,21 @@ export class AiAnswersController {
     @AuthWorkspace() workspace: Workspace,
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+    const raw = (res as any).raw || res;
+    raw.setHeader('Content-Type', 'text/event-stream');
+    raw.setHeader('Cache-Control', 'no-cache');
+    raw.setHeader('Connection', 'keep-alive');
+    if (typeof raw.flushHeaders === 'function') {
+      raw.flushHeaders();
+    }
 
     try {
       if (!this.providerFactory.isConfigured()) {
-        res.write(
+        raw.write(
           `data: ${JSON.stringify({ error: 'AI is not configured' })}\n\n`,
         );
-        res.write('data: [DONE]\n\n');
-        res.end();
+        raw.write('data: [DONE]\n\n');
+        raw.end();
         return;
       }
 
@@ -94,7 +97,7 @@ export class AiAnswersController {
 
       // Send sources
       if (sources.length > 0) {
-        res.write(`data: ${JSON.stringify({ sources })}\n\n`);
+        raw.write(`data: ${JSON.stringify({ sources })}\n\n`);
       }
 
       // Build context
@@ -113,17 +116,17 @@ export class AiAnswersController {
       });
 
       for await (const chunk of result.textStream) {
-        res.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
+        raw.write(`data: ${JSON.stringify({ content: chunk })}\n\n`);
       }
 
-      res.write('data: [DONE]\n\n');
+      raw.write('data: [DONE]\n\n');
     } catch (error: any) {
-      res.write(
+      raw.write(
         `data: ${JSON.stringify({ error: error?.message || 'An error occurred' })}\n\n`,
       );
-      res.write('data: [DONE]\n\n');
+      raw.write('data: [DONE]\n\n');
     } finally {
-      res.end();
+      raw.end();
     }
   }
 

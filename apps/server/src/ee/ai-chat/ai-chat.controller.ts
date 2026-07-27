@@ -99,10 +99,13 @@ export class AiChatController {
     @AuthWorkspace() workspace: Workspace,
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+    const raw = (res as any).raw || res;
+    raw.setHeader('Content-Type', 'text/event-stream');
+    raw.setHeader('Cache-Control', 'no-cache');
+    raw.setHeader('Connection', 'keep-alive');
+    if (typeof raw.flushHeaders === 'function') {
+      raw.flushHeaders();
+    }
 
     try {
       for await (const event of this.aiChatService.sendMessage(
@@ -110,14 +113,14 @@ export class AiChatController {
         user.id,
         workspace.id,
       )) {
-        res.write(`data: ${JSON.stringify(event)}\n\n`);
+        raw.write(`data: ${JSON.stringify(event)}\n\n`);
       }
-      res.write('data: [DONE]\n\n');
+      raw.write('data: [DONE]\n\n');
     } catch (error: any) {
       console.error('[AiChatController] Error sending chat message:', error);
       const message = error?.message || 'An error occurred';
       const code = error?.status || error?.statusCode;
-      res.write(
+      raw.write(
         `data: ${JSON.stringify({
           type: 'error',
           message,
@@ -125,9 +128,9 @@ export class AiChatController {
           retryable: false,
         })}\n\n`,
       );
-      res.write('data: [DONE]\n\n');
+      raw.write('data: [DONE]\n\n');
     } finally {
-      res.end();
+      raw.end();
     }
   }
 

@@ -29,22 +29,25 @@ export class AiController {
     @Body() body: { action?: string; content: string; prompt?: string },
     @Res() res: Response,
   ) {
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders();
+    const raw = (res as any).raw || res;
+    raw.setHeader('Content-Type', 'text/event-stream');
+    raw.setHeader('Cache-Control', 'no-cache');
+    raw.setHeader('Connection', 'keep-alive');
+    if (typeof raw.flushHeaders === 'function') {
+      raw.flushHeaders();
+    }
 
     try {
       for await (const chunk of this.aiService.generateStream(body)) {
-        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
+        raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
-      res.write('data: [DONE]\n\n');
+      raw.write('data: [DONE]\n\n');
     } catch (error: any) {
-      res.write(
+      raw.write(
         `data: ${JSON.stringify({ error: error?.message || 'An error occurred' })}\n\n`,
       );
     } finally {
-      res.end();
+      raw.end();
     }
   }
 }
