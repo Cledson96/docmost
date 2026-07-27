@@ -2,8 +2,8 @@ import { IsNotEmpty, IsString, IsOptional, IsUUID, IsArray, IsObject, IsNumber }
 
 export class CreateBaseDto {
   @IsString()
-  @IsNotEmpty()
-  name: string;
+  @IsOptional()
+  name?: string;
 
   @IsString()
   @IsOptional()
@@ -18,8 +18,16 @@ export class CreateBaseDto {
   pageId?: string;
 
   @IsUUID()
-  @IsNotEmpty()
-  spaceId: string;
+  @IsOptional()
+  parentPageId?: string;
+
+  @IsUUID()
+  @IsOptional()
+  spaceId?: string;
+
+  @IsString()
+  @IsOptional()
+  template?: string;
 }
 
 export class UpdateBaseDto {

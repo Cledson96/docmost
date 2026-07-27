@@ -29,6 +29,26 @@ export class BaseService {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   async createBase(dto: CreateBaseDto, userId: string, workspaceId: string) {
+    let spaceId = dto.spaceId;
+    const parentPageId = dto.parentPageId || null;
+
+    if (!spaceId && parentPageId) {
+      const parentPage = await this.db
+        .selectFrom('pages')
+        .select('spaceId')
+        .where('id', '=', parentPageId)
+        .where('workspaceId', '=', workspaceId)
+        .executeTakeFirst();
+      if (parentPage) {
+        spaceId = parentPage.spaceId;
+      }
+    }
+
+    if (!spaceId) {
+      throw new BadRequestException('spaceId or parentPageId is required');
+    }
+
+    const title = dto.name || (dto.template === 'kanban' ? 'Kanban' : 'Untitled');
     const pageId = dto.pageId || randomUUID();
 
     // 1. Create page
@@ -36,10 +56,11 @@ export class BaseService {
       .insertInto('pages')
       .values({
         id: pageId,
-        title: dto.name,
+        title,
         isBase: true,
         baseSchemaVersion: 1,
-        spaceId: dto.spaceId,
+        spaceId,
+        parentPageId,
         workspaceId,
         creatorId: userId,
         lastUpdatedById: userId,
@@ -58,30 +79,59 @@ export class BaseService {
       .insertInto('baseProperties')
       .values({
         id: propId,
-        pageId: pageId,
+        pageId: page.id,
+        workspaceId,
         name: 'Title',
-        type: 'text',
+        type: 'title',
         position: 'h0',
         isPrimary: true,
-        schemaVersion: 1,
-        workspaceId,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
       .execute();
 
+    // If template is kanban, add a Select property "Status"
+    const viewType = dto.template === 'kanban' ? 'kanban' : 'table';
+    const viewName = dto.template === 'kanban' ? 'Board' : 'Grid';
+
+    let selectPropId: string | undefined;
+    if (dto.template === 'kanban') {
+      selectPropId = randomUUID().substring(0, 8);
+      await this.db
+        .insertInto('baseProperties')
+        .values({
+          id: selectPropId,
+          pageId: page.id,
+          workspaceId,
+          name: 'Status',
+          type: 'select',
+          position: 'h1',
+          isPrimary: false,
+          typeOptions: JSON.stringify({
+            options: [
+              { id: randomUUID().substring(0, 8), name: 'To Do', color: 'gray' },
+              { id: randomUUID().substring(0, 8), name: 'In Progress', color: 'blue' },
+              { id: randomUUID().substring(0, 8), name: 'Done', color: 'green' },
+            ],
+          }),
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .execute();
+    }
+
     // 3. Create default view
+    const viewId = randomUUID();
     await this.db
       .insertInto('baseViews')
       .values({
-        id: randomUUID(),
-        pageId: pageId,
-        name: 'Table',
-        type: 'table',
-        position: 'h0',
-        config: JSON.stringify({}),
+        id: viewId,
+        pageId: page.id,
         workspaceId,
-        creatorId: userId,
+        name: viewName,
+        type: viewType,
+        position: 'h0',
+        config: selectPropId ? JSON.stringify({ groupByPropertyId: selectPropId }) : null,
         createdAt: new Date(),
         updatedAt: new Date(),
       })
