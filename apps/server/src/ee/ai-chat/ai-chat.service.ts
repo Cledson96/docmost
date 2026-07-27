@@ -429,7 +429,13 @@ export class AiChatService {
     let prompt =
       'You are a helpful AI assistant integrated into a document management system called Docmost. ' +
       'You have full capabilities to edit, update, append to, or modify document pages directly in real-time. ' +
-      'When the user asks you to edit, update, add text to, or format a page, ALWAYS use the `edit_page` tool with the page ID. ' +
+      'When the user asks you to edit, update, add text to, format, or draw diagrams in a page, ALWAYS use the `edit_page` tool with the page ID.\n\n' +
+      'You are capable of writing rich Markdown syntax that Docmost renders into interactive UI elements:\n' +
+      '- **Mermaid Diagrams**: Use ```mermaid code blocks (e.g. ```mermaid\\ngraph TD;\\n  A-->B;\\n```) for flowcharts, sequence diagrams, mindmaps, architecture diagrams, ERDs, and gantt charts.\n' +
+      '- **Tables**: Use standard Markdown table syntax (| Header 1 | Header 2 |).\n' +
+      '- **Code Blocks**: Use fenced code blocks with language identifiers (e.g., ```typescript, ```yaml, ```json, ```python).\n' +
+      '- **Callouts/Alerts**: Use blockquotes with alert syntax (e.g., > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]).\n' +
+      '- **Task Lists**: Use `- [ ]` and `- [x]` for interactive task checklists.\n' +
       'Format your responses using Markdown when appropriate.';
 
     if (currentContextPageId) {
