@@ -6,6 +6,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    env_file:
+      - .env
     environment:
       APP_URL: ${APP_URL:?defina APP_URL}
       APP_SECRET: ${APP_SECRET:?defina APP_SECRET}
@@ -13,6 +15,12 @@ services:
       REDIS_URL: redis://redis:6379
       PORT: 3000
       HOST: 0.0.0.0
+      AI_DRIVER: ${AI_DRIVER:-openai}
+      AI_COMPLETION_MODEL: ${AI_COMPLETION_MODEL:-gpt-4o-mini}
+      AI_CHAT_MODEL: ${AI_CHAT_MODEL:-gpt-4o-mini}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OLLAMA_API_URL: ${OLLAMA_API_URL:-}
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
     restart: unless-stopped
