@@ -6,15 +6,22 @@ import {
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
-import { generateText, streamText } from 'ai';
+import { generateText, streamText, tool } from 'ai';
+import { z } from 'zod';
 import { AiProviderFactory } from '../ai/ai-provider.factory';
 import { sql } from 'kysely';
+import { PageService } from '../../core/page/services/page.service';
+import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { User } from '@docmost/db/types/entity.types';
+import { ContentOperation } from '../../core/page/dto/update-page.dto';
 
 @Injectable()
 export class AiChatService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly providerFactory: AiProviderFactory,
+    private readonly pageService: PageService,
+    private readonly pageRepo: PageRepo,
   ) {}
 
   async createChat(userId: string, workspaceId: string) {
@@ -213,12 +220,14 @@ export class AiChatService {
       contextPageId?: string;
       attachmentIds?: string[];
     },
-    userId: string,
+    user: User,
     workspaceId: string,
   ) {
     if (!this.providerFactory.isConfigured()) {
       throw new BadRequestException('AI is not configured');
     }
+
+    const userId = user.id;
 
     // Create or get chat
     let chatId = params.chatId;
@@ -286,13 +295,13 @@ export class AiChatService {
     if (params.contextPageId) {
       const page = await this.db
         .selectFrom('pages')
-        .select(['title', 'content'])
+        .select(['id', 'title', 'content'])
         .where('id', '=', params.contextPageId)
         .where('workspaceId', '=', workspaceId)
         .executeTakeFirst();
 
       if (page) {
-        contextText += `\n\n## Current page: ${page.title}\n${this.extractTextFromContent(page.content)}`;
+        contextText += `\n\n## Current page (ID: ${page.id}, Title: ${page.title}):\n${this.extractTextFromContent(page.content)}`;
       }
     }
 
@@ -302,20 +311,89 @@ export class AiChatService {
       content: msg.content || '',
     }));
 
-    const systemPrompt = this.buildSystemPrompt(contextText);
+    const systemPrompt = this.buildSystemPrompt(contextText, params.contextPageId);
 
-    // Stream the AI response
+    const tools: Record<string, any> = {
+      edit_page: (tool as any)({
+        description:
+          'Edit, update, append to, or replace the content of a document page. ' +
+          'Use this tool whenever the user asks you to edit a page, add text, rewrite content, insert code, or update a document page.',
+        parameters: z.object({
+          pageId: z.string().describe('The ID of the page to edit'),
+          content: z.string().describe('The markdown content to insert or update'),
+          operation: z
+            .enum(['append', 'prepend', 'replace'])
+            .default('append')
+            .describe(
+              'append (add to bottom), prepend (add to top), or replace (overwrite entire document)',
+            ),
+        }),
+        execute: async ({ pageId, content, operation }: any) => {
+          try {
+            await this.pageService.updatePageContent(
+              pageId,
+              content,
+              operation as ContentOperation,
+              'markdown',
+              user,
+            );
+            return {
+              success: true,
+              pageId,
+              operation,
+              message: 'Page content updated successfully',
+            };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        },
+      }),
+      update_page_title: (tool as any)({
+        description: 'Update the title of a document page.',
+        parameters: z.object({
+          pageId: z.string().describe('The ID of the page'),
+          title: z.string().describe('The new title for the page'),
+        }),
+        execute: async ({ pageId, title }: any) => {
+          try {
+            await this.pageRepo.updatePage({ title, updatedAt: new Date() }, pageId);
+            return { success: true, pageId, title };
+          } catch (err: any) {
+            return { success: false, error: err.message };
+          }
+        },
+      }),
+    };
+
+    // Stream the AI response with tools
     const result = streamText({
       model: this.providerFactory.getChatModel(),
       system: systemPrompt,
       messages,
+      tools,
     });
 
     let fullResponse = '';
 
-    for await (const chunk of result.textStream) {
-      fullResponse += chunk;
-      yield { type: 'content', text: chunk };
+    for await (const chunk of (result as any).fullStream) {
+      if (chunk.type === 'text-delta') {
+        const text = chunk.textDelta ?? chunk.text ?? '';
+        fullResponse += text;
+        yield { type: 'content', text };
+      } else if (chunk.type === 'tool-call') {
+        yield {
+          type: 'tool_call',
+          id: chunk.toolCallId,
+          name: chunk.toolName,
+          args: (chunk.args ?? chunk.input ?? {}) as Record<string, unknown>,
+        };
+      } else if (chunk.type === 'tool-result') {
+        yield {
+          type: 'tool_result',
+          id: chunk.toolCallId,
+          result: chunk.result ?? chunk.output,
+        };
+      }
     }
 
     // Save assistant message
@@ -347,14 +425,19 @@ export class AiChatService {
     yield { type: 'done', messageId: assistantMsg.id };
   }
 
-  private buildSystemPrompt(context: string): string {
+  private buildSystemPrompt(context: string, currentContextPageId?: string): string {
     let prompt =
       'You are a helpful AI assistant integrated into a document management system called Docmost. ' +
-      'You help users with their questions, writing, and document-related tasks. ' +
-      'Be concise, helpful, and accurate. Format your responses using Markdown when appropriate.';
+      'You have full capabilities to edit, update, append to, or modify document pages directly in real-time. ' +
+      'When the user asks you to edit, update, add text to, or format a page, ALWAYS use the `edit_page` tool with the page ID. ' +
+      'Format your responses using Markdown when appropriate.';
+
+    if (currentContextPageId) {
+      prompt += `\n\nThe user is currently viewing the page with ID: "${currentContextPageId}". Use this pageId for editing unless specified otherwise.`;
+    }
 
     if (context) {
-      prompt += `\n\nThe user has referenced the following document content for context:\n\n${context}`;
+      prompt += `\n\nDocument context:\n\n${context}`;
     }
 
     return prompt;

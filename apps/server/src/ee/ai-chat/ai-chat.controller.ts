@@ -110,7 +110,7 @@ export class AiChatController {
     try {
       for await (const event of this.aiChatService.sendMessage(
         body,
-        user.id,
+        user,
         workspace.id,
       )) {
         raw.write(`data: ${JSON.stringify(event)}\n\n`);
