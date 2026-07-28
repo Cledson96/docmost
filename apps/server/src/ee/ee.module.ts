@@ -5,6 +5,7 @@ import { TemplateModule } from './template/template.module';
 import { AiModule } from './ai/ai.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { PageVerificationModule } from './page-verification/page-verification.module';
+import { McpModule } from './mcp/mcp.module';
 
 @Module({
   imports: [
@@ -14,6 +15,7 @@ import { PageVerificationModule } from './page-verification/page-verification.mo
     AiModule,
     AiChatModule,
     PageVerificationModule,
+    McpModule,
   ],
 })
 export class EeModule {}
