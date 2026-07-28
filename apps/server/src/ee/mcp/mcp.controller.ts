@@ -13,7 +13,7 @@ import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { McpService } from './mcp.service';
 
-@Controller('mcp')
+@Controller(['mcp', 'api/mcp'])
 export class McpController {
   constructor(private readonly mcpService: McpService) {}
 
