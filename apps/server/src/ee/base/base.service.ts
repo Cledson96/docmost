@@ -24,6 +24,38 @@ function getNextPosition(lastPos?: string): string {
   return lastPos + 'h';
 }
 
+function buildBaseRowFilter(filter: any): any {
+  if (!filter || typeof filter !== 'object') return undefined;
+
+  if (Array.isArray(filter.children)) {
+    const expressions = filter.children
+      .map((child: any) => buildBaseRowFilter(child))
+      .filter(Boolean);
+
+    if (expressions.length === 0) return undefined;
+
+    const separator = filter.op === 'or' ? sql` OR ` : sql` AND `;
+    return sql<boolean>`(${sql.join(expressions, separator)})`;
+  }
+
+  if (typeof filter.propertyId !== 'string') return undefined;
+
+  const cellText = sql`base_cell_text(cells, ${filter.propertyId})`;
+
+  switch (filter.op) {
+    case 'eq':
+      return sql<boolean>`${cellText} = ${String(filter.value ?? '')}`;
+    case 'neq':
+      return sql<boolean>`${cellText} IS DISTINCT FROM ${String(filter.value ?? '')}`;
+    case 'isEmpty':
+      return sql<boolean>`NULLIF(${cellText}, '') IS NULL`;
+    case 'isNotEmpty':
+      return sql<boolean>`NULLIF(${cellText}, '') IS NOT NULL`;
+    default:
+      return undefined;
+  }
+}
+
 @Injectable()
 export class BaseService {
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
@@ -513,6 +545,11 @@ export class BaseService {
       .where('pageId', '=', dto.pageId)
       .where('workspaceId', '=', workspaceId)
       .where('deletedAt', 'is', null);
+
+    const filterExpression = buildBaseRowFilter(dto.filter);
+    if (filterExpression) {
+      query = query.where(filterExpression);
+    }
 
     if (dto.cursor) {
       query = query.where('position', '>', dto.cursor);
