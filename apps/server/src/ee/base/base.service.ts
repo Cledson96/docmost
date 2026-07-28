@@ -24,35 +24,32 @@ function getNextPosition(lastPos?: string): string {
   return lastPos + 'h';
 }
 
-function buildBaseRowFilter(filter: any): any {
-  if (!filter || typeof filter !== 'object') return undefined;
+function matchesBaseRowFilter(cells: Record<string, any>, filter: any): boolean {
+  if (!filter || typeof filter !== 'object') return true;
 
   if (Array.isArray(filter.children)) {
-    const expressions = filter.children
-      .map((child: any) => buildBaseRowFilter(child))
-      .filter(Boolean);
-
-    if (expressions.length === 0) return undefined;
-
-    const separator = filter.op === 'or' ? sql` OR ` : sql` AND `;
-    return sql<boolean>`(${sql.join(expressions, separator)})`;
+    return filter.op === 'or'
+      ? filter.children.some((child: any) => matchesBaseRowFilter(cells, child))
+      : filter.children.every((child: any) => matchesBaseRowFilter(cells, child));
   }
 
-  if (typeof filter.propertyId !== 'string') return undefined;
+  if (typeof filter.propertyId !== 'string') return true;
 
-  const cellText = sql`base_cell_text(cells, ${filter.propertyId})`;
-
+  const value = cells[filter.propertyId];
+  const expected = filter.value;
   switch (filter.op) {
     case 'eq':
-      return sql<boolean>`${cellText} = ${String(filter.value ?? '')}`;
+      return value === expected;
     case 'neq':
-      return sql<boolean>`${cellText} IS DISTINCT FROM ${String(filter.value ?? '')}`;
+      return value !== expected;
     case 'isEmpty':
-      return sql<boolean>`NULLIF(${cellText}, '') IS NULL`;
+      return value === null || value === undefined || value === '' ||
+        (Array.isArray(value) && value.length === 0);
     case 'isNotEmpty':
-      return sql<boolean>`NULLIF(${cellText}, '') IS NOT NULL`;
+      return value !== null && value !== undefined && value !== '' &&
+        (!Array.isArray(value) || value.length > 0);
     default:
-      return undefined;
+      return true;
   }
 }
 
@@ -546,21 +543,24 @@ export class BaseService {
       .where('workspaceId', '=', workspaceId)
       .where('deletedAt', 'is', null);
 
-    const filterExpression = buildBaseRowFilter(dto.filter);
-    if (filterExpression) {
-      query = query.where(filterExpression);
-    }
-
     if (dto.cursor) {
       query = query.where('position', '>', dto.cursor);
     }
 
-    query = query.orderBy('position asc').limit(limit + 1);
+    query = query.orderBy('position asc');
 
     const rows = await query.execute();
+    const filteredRows = dto.filter
+      ? rows.filter((row) => {
+          const cells = typeof row.cells === 'string'
+            ? JSON.parse(row.cells)
+            : row.cells || {};
+          return matchesBaseRowFilter(cells, dto.filter);
+        })
+      : rows;
 
-    const hasMore = rows.length > limit;
-    const items = rows.slice(0, limit).map((r) => ({
+    const hasMore = filteredRows.length > limit;
+    const items = filteredRows.slice(0, limit).map((r) => ({
       ...r,
       cells: typeof r.cells === 'string' ? JSON.parse(r.cells) : r.cells || {},
     }));
