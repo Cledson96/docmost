@@ -32,6 +32,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     spaceMemberRepo: { getUserSpaceIds: jest.fn().mockResolvedValue([]) },
     spaceAbility: { createForUser: jest.fn() },
     baseService: { createBase: jest.fn() },
+    searchService: { searchPage: jest.fn().mockResolvedValue({ items: [] }) },
     auditService: { log: jest.fn() },
     ...overrides,
   };
@@ -45,6 +46,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     deps.spaceMemberRepo as any,
     deps.spaceAbility as any,
     deps.baseService as any,
+    deps.searchService as any,
     deps.auditService as any,
   );
 
@@ -276,6 +278,79 @@ describe('McpService permissions', () => {
 
     expect(names).toEqual(expect.arrayContaining(['get_page', 'create_base_row']));
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('search_workspace delegates to the full-text search scoped to the user', async () => {
+    const { service, deps } = buildService();
+    deps.searchService.searchPage.mockResolvedValue({
+      items: [
+        {
+          id: 'page-1',
+          title: 'Page',
+          slugId: 'abc123',
+          space: { id: 'space-1', name: 'Space' },
+          highlight: 'a <b>match</b>',
+        },
+      ],
+    });
+
+    const res: any = await callTool(service, 'search_workspace', {
+      query: 'match',
+    });
+
+    expect(deps.searchService.searchPage).toHaveBeenCalledWith(
+      expect.objectContaining({ query: 'match' }),
+      { userId: 'user-1', workspaceId: 'workspace-1' },
+    );
+    expect(JSON.parse(res.result.content[0].text).results[0]).toEqual(
+      expect.objectContaining({ spaceId: 'space-1', highlight: 'a <b>match</b>' }),
+    );
+  });
+
+  it('search_workspace checks membership when a spaceId is given', async () => {
+    const { service, deps } = buildService();
+    deps.spaceAbility.createForUser.mockResolvedValue({ cannot: () => true });
+
+    const res: any = await callTool(service, 'search_workspace', {
+      query: 'match',
+      spaceId: 'space-9',
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(deps.searchService.searchPage).not.toHaveBeenCalled();
+  });
+
+  it('get_page returns markdown by default and raw json on request', async () => {
+    const { service, deps } = buildService();
+    deps.pageRepo.findById.mockResolvedValue({
+      ...page,
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [{ type: 'text', text: 'hello' }],
+          },
+        ],
+      },
+    });
+
+    const asMarkdown: any = await callTool(service, 'get_page', {
+      pageId: 'page-1',
+    });
+    const markdownBody = JSON.parse(asMarkdown.result.content[0].text);
+
+    expect(markdownBody.format).toBe('markdown');
+    expect(typeof markdownBody.content).toBe('string');
+    expect(markdownBody.content).toContain('hello');
+
+    const asJson: any = await callTool(service, 'get_page', {
+      pageId: 'page-1',
+      format: 'json',
+    });
+    const jsonBody = JSON.parse(asJson.result.content[0].text);
+
+    expect(jsonBody.content.type).toBe('doc');
   });
 
   it('list_spaces returns nothing when the user belongs to no space', async () => {

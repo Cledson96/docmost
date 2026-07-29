@@ -23,6 +23,12 @@ import {
   SpaceCaslSubject,
 } from '../../core/casl/interfaces/space-ability.type';
 import { BaseService } from '../base/base.service';
+import { SearchService } from '../../core/search/search.service';
+import { SearchDTO } from '../../core/search/dto/search.dto';
+import {
+  jsonToHtml,
+  jsonToMarkdown,
+} from '../../collaboration/collaboration.util';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import {
@@ -65,6 +71,7 @@ export class McpService {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly baseService: BaseService,
+    private readonly searchService: SearchService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -186,11 +193,18 @@ export class McpService {
       },
       {
         name: 'get_page',
-        description: 'Retrieve full content and metadata of a page by pageId or slugId.',
+        description:
+          'Retrieve full content and metadata of a page by pageId or slugId. Content is returned as markdown by default.',
         inputSchema: {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Page ID or slug ID' },
+            format: {
+              type: 'string',
+              enum: ['markdown', 'html', 'json'],
+              description:
+                'Output format for the content. Defaults to markdown. Use json only when you need the raw ProseMirror document.',
+            },
           },
           required: ['pageId'],
         },
@@ -241,11 +255,16 @@ export class McpService {
       {
         name: 'search_workspace',
         description:
-          'Search pages by title across the spaces the authenticated user can access.',
+          'Full-text search over page titles and body content, ranked by relevance, across the spaces the authenticated user can access. Each result carries a highlight snippet showing the match in context.',
         inputSchema: {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Search term or keyword' },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space ID to restrict the search to',
+            },
+            limit: { type: 'number', description: 'Max results. Defaults to 25.' },
           },
           required: ['query'],
         },
@@ -597,6 +616,18 @@ export class McpService {
   }
 
   /**
+   * ProseMirror JSON is expensive for an agent to read and easy to
+   * misinterpret, so markdown is the default wire format.
+   */
+  private renderPageContent(content: any, format: string) {
+    if (!content || format === 'json') {
+      return content;
+    }
+
+    return format === 'html' ? jsonToHtml(content) : jsonToMarkdown(content);
+  }
+
+  /**
    * Load a page and assert it belongs to the caller's workspace.
    * Workspace mismatch is reported as "not found" so the tool cannot be used
    * to probe for page IDs in other workspaces.
@@ -703,13 +734,16 @@ export class McpService {
 
         await this.pageAccessService.validateCanView(page, user);
 
+        const format = args.format || 'markdown';
+
         return {
           id: page.id,
           title: page.title,
           slugId: page.slugId,
           spaceId: page.spaceId,
           parentPageId: page.parentPageId,
-          content: page.content,
+          format,
+          content: this.renderPageContent(page.content, format),
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         };
@@ -818,23 +852,41 @@ export class McpService {
       }
 
       case 'search_workspace': {
-        const spaceIds = await this.spaceMemberRepo.getUserSpaceIds(user.id);
-        if (spaceIds.length === 0) {
-          return { results: [] };
+        if (!args.query) {
+          throw new BadRequestException('query is required');
         }
 
-        const searchPattern = `%${args.query}%`;
-        const pages = await this.db
-          .selectFrom('pages')
-          .select(['id', 'title', 'slugId', 'spaceId'])
-          .where('workspaceId', '=', workspace.id)
-          .where('spaceId', 'in', spaceIds)
-          .where('deletedAt', 'is', null)
-          .where('title', 'ilike', searchPattern)
-          .limit(20)
-          .execute();
+        if (args.spaceId) {
+          const ability = await this.spaceAbility.createForUser(
+            user,
+            args.spaceId,
+          );
+          if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+            throw new ForbiddenException();
+          }
+        }
 
-        return { results: await this.filterRestrictedPages(pages, user) };
+        // searchPage scopes to the user's spaces and applies page-level
+        // restrictions itself when userId is passed.
+        const { items } = await this.searchService.searchPage(
+          {
+            query: args.query,
+            spaceId: args.spaceId,
+            limit: args.limit || 25,
+          } as SearchDTO,
+          { userId: user.id, workspaceId: workspace.id },
+        );
+
+        return {
+          results: items.map((item: any) => ({
+            id: item.id,
+            title: item.title,
+            slugId: item.slugId,
+            spaceId: item.space?.id ?? item.spaceId,
+            spaceName: item.space?.name,
+            highlight: item.highlight,
+          })),
+        };
       }
 
       default:

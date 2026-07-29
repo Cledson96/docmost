@@ -4,9 +4,10 @@ import { McpService } from './mcp.service';
 import { PageModule } from '../../core/page/page.module';
 import { BaseModule } from '../base/base.module';
 import { CaslModule } from '../../core/casl/casl.module';
+import { SearchModule } from '../../core/search/search.module';
 
 @Module({
-  imports: [PageModule, BaseModule, CaslModule],
+  imports: [PageModule, BaseModule, CaslModule, SearchModule],
   controllers: [McpController],
   providers: [McpService],
   exports: [McpService],
