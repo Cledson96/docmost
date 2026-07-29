@@ -12,6 +12,7 @@ import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator'
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { McpService } from './mcp.service';
+import { SkipTransform } from '../../common/decorators/skip-transform.decorator';
 
 @Controller(['mcp', 'api/mcp'])
 export class McpController {
@@ -34,6 +35,7 @@ export class McpController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @HttpCode(HttpStatus.OK)
+  @SkipTransform()
   async handleMcpRpc(
     @Body() body: any,
     @AuthUser() user: User,
