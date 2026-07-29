@@ -37,6 +37,7 @@ import { TemplateService } from '../template/template.service';
 import { SearchAttachmentsService } from '../search-attachments/search-attachments.service';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
 import { AttachmentService } from '../../core/attachment/services/attachment.service';
+import { EmbeddingService } from '../embedding/embedding.service';
 import { MultipartFile } from '@fastify/multipart';
 import { Readable } from 'stream';
 import { ExportService } from '../../integrations/export/export.service';
@@ -109,6 +110,7 @@ export class McpService {
     private readonly searchAttachmentsService: SearchAttachmentsService,
     private readonly attachmentRepo: AttachmentRepo,
     private readonly attachmentService: AttachmentService,
+    private readonly embeddingService: EmbeddingService,
     private readonly exportService: ExportService,
     private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
@@ -805,6 +807,43 @@ export class McpService {
    */
   private getBaseToolsList() {
     return [
+      {
+        name: 'search_semantic',
+        description:
+          'Find pages by meaning rather than by wording. Use this when the question is conceptual and you cannot guess the exact terms the page uses — "how do we handle unhappy customers" will reach a page titled "Complaints policy" even though no word matches. For a known term or a proper noun, search_workspace is sharper. Each hit carries a similarity score between 0 and 1 and the passage that matched.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description:
+                'The question or idea to look for, in natural language. Full sentences work better here than keywords.',
+            },
+            spaceId: { type: 'string', description: 'Optional space to restrict to' },
+            limit: { type: 'number', description: 'Max pages. Defaults to 10.' },
+            minSimilarity: {
+              type: 'number',
+              description:
+                'Drop hits below this score, 0 to 1. Defaults to 0.2. Raise it if results feel loose.',
+            },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'reindex_embeddings',
+        description:
+          'Build the semantic index for pages that do not have one yet, and report coverage. Run it once after enabling semantic search; afterwards pages are indexed automatically when saved. Indexes in batches, so call it again while pending is above zero.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            batchSize: {
+              type: 'number',
+              description: 'Pages to index in this call. Defaults to 25, max 100.',
+            },
+          },
+        },
+      },
       {
         name: 'search_everything',
         description:
@@ -2285,6 +2324,113 @@ export class McpService {
     switch (name) {
       case 'search_everything': {
         return this.searchEverything(args, user, workspace);
+      }
+
+      case 'search_semantic': {
+        if (!args.query) {
+          throw new BadRequestException('query is required');
+        }
+
+        if (args.spaceId) {
+          const ability = await this.spaceAbility.createForUser(
+            user,
+            args.spaceId,
+          );
+          if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+            throw new ForbiddenException();
+          }
+        }
+
+        const spaceIds = args.spaceId
+          ? [args.spaceId]
+          : await this.spaceMemberRepo.getUserSpaceIds(user.id);
+
+        const limit = Math.min(args.limit || 10, 50);
+        const minSimilarity =
+          typeof args.minSimilarity === 'number' ? args.minSimilarity : 0.2;
+
+        const hits = await this.embeddingService.search({
+          query: args.query,
+          workspaceId: workspace.id,
+          spaceIds,
+          limit,
+        });
+
+        // Vector distance ignores page-level restrictions, so filter after
+        // ranking exactly as the keyword paths do.
+        const accessible = new Set(
+          await this.pagePermissionRepo.filterAccessiblePageIds({
+            pageIds: hits.map((hit) => hit.pageId),
+            userId: user.id,
+            spaceId: args.spaceId,
+          }),
+        );
+
+        const results = hits
+          .filter(
+            (hit) =>
+              accessible.has(hit.pageId) && hit.similarity >= minSimilarity,
+          )
+          .slice(0, limit);
+
+        if (results.length === 0) {
+          const indexed = await this.embeddingService.countIndexedPages(
+            workspace.id,
+          );
+          if (indexed === 0) {
+            return {
+              results: [],
+              note: 'No page has been embedded yet — run reindex_embeddings first.',
+            };
+          }
+        }
+
+        return { results };
+      }
+
+      case 'reindex_embeddings': {
+        if (!this.embeddingService.isConfigured()) {
+          throw new BadRequestException(
+            'Semantic search needs OPENAI_API_KEY to be set on the server.',
+          );
+        }
+
+        const batchSize = Math.min(args.batchSize || 25, 100);
+        const pageIds = await this.embeddingService.findUnindexedPageIds(
+          workspace.id,
+          batchSize,
+        );
+
+        let indexed = 0;
+        let skipped = 0;
+        const failures: string[] = [];
+
+        for (const pageId of pageIds) {
+          try {
+            const { chunks } = await this.embeddingService.indexPage(pageId);
+            if (chunks > 0) indexed++;
+            else skipped++;
+          } catch (err: any) {
+            failures.push(`${pageId}: ${err?.message ?? err}`);
+          }
+        }
+
+        const stillPending = await this.embeddingService.findUnindexedPageIds(
+          workspace.id,
+          1000,
+        );
+
+        return {
+          indexed,
+          // Pages with no body text have nothing to embed and stay pending
+          // forever; reported separately so the count is not mistaken for a bug.
+          skippedEmpty: skipped,
+          pendingAfter: stillPending.length,
+          totalPagesIndexed: await this.embeddingService.countIndexedPages(
+            workspace.id,
+          ),
+          ...(failures.length > 0 && { failures }),
+        };
       }
 
       case 'create_base': {

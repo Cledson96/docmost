@@ -48,6 +48,13 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     searchAttachmentsService: { search: jest.fn() },
     attachmentRepo: { findById: jest.fn() },
     attachmentService: { uploadFile: jest.fn() },
+    embeddingService: {
+      isConfigured: jest.fn().mockReturnValue(true),
+      search: jest.fn().mockResolvedValue([]),
+      indexPage: jest.fn(),
+      findUnindexedPageIds: jest.fn().mockResolvedValue([]),
+      countIndexedPages: jest.fn().mockResolvedValue(0),
+    },
     exportService: { exportPages: jest.fn() },
     wsService: { emitCommentEvent: jest.fn() },
     auditService: { log: jest.fn() },
@@ -77,6 +84,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       'searchAttachmentsService',
       'attachmentRepo',
       'attachmentService',
+      'embeddingService',
       'exportService',
       'wsService',
       'auditService',
@@ -491,6 +499,54 @@ describe('McpService permissions', () => {
     });
     expect(good.result.isError).toBeUndefined();
     expect(JSON.parse(good.result.content[0].text).attachmentId).toBe('att-1');
+  });
+
+  it('search_semantic drops hits below the similarity floor', async () => {
+    const { service, deps } = buildService();
+    deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
+    deps.embeddingService.search.mockResolvedValue([
+      { pageId: 'page-1', title: 'Perto', similarity: 0.81, excerpt: 'a' },
+      { pageId: 'page-2', title: 'Longe', similarity: 0.05, excerpt: 'b' },
+    ]);
+    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue([
+      'page-1',
+      'page-2',
+    ]);
+
+    const res: any = await callTool(service, 'search_semantic', {
+      query: 'como lidamos com cliente insatisfeito',
+    });
+
+    const results = JSON.parse(res.result.content[0].text).results;
+    expect(results).toHaveLength(1);
+    expect(results[0].pageId).toBe('page-1');
+  });
+
+  it('search_semantic still applies page-level restrictions after ranking', async () => {
+    const { service, deps } = buildService();
+    deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
+    deps.embeddingService.search.mockResolvedValue([
+      { pageId: 'page-1', title: 'Livre', similarity: 0.9, excerpt: 'a' },
+      { pageId: 'page-secreta', title: 'Restrita', similarity: 0.95, excerpt: 'b' },
+    ]);
+    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue(['page-1']);
+
+    const res: any = await callTool(service, 'search_semantic', { query: 'x' });
+
+    const results = JSON.parse(res.result.content[0].text).results;
+    expect(results.map((r: any) => r.pageId)).toEqual(['page-1']);
+  });
+
+  it('search_semantic says so when nothing has been embedded yet', async () => {
+    const { service, deps } = buildService();
+    deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
+    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue([]);
+
+    const res: any = await callTool(service, 'search_semantic', { query: 'x' });
+
+    expect(JSON.parse(res.result.content[0].text).note).toContain(
+      'reindex_embeddings',
+    );
   });
 
   it('exposes the page and base tool surface', async () => {

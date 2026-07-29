@@ -8,7 +8,9 @@ export interface PageEmbeddings {
   modelName: string;
   modelDimensions: number;
   workspaceId: string;
-  attachmentId: string;
+  // Nullable in the schema: a chunk comes either from a page body or from an
+  // attachment extracted for that page.
+  attachmentId: string | null;
   embedding: number[];
   chunkIndex: Generated<number>;
   chunkStart: Generated<number>;

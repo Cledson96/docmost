@@ -6,6 +6,7 @@ import { AiModule } from './ai/ai.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { PageVerificationModule } from './page-verification/page-verification.module';
 import { McpModule } from './mcp/mcp.module';
+import { EmbeddingModule } from './embedding/embedding.module';
 
 @Module({
   imports: [
@@ -16,6 +17,7 @@ import { McpModule } from './mcp/mcp.module';
     AiChatModule,
     PageVerificationModule,
     McpModule,
+    EmbeddingModule,
   ],
 })
 export class EeModule {}
