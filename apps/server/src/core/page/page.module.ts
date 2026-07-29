@@ -18,7 +18,7 @@ import { LabelModule } from '../label/label.module';
     TrashCleanupService,
     BacklinkService,
   ],
-  exports: [PageService, PageHistoryService],
+  exports: [PageService, PageHistoryService, BacklinkService],
   imports: [
     StorageModule,
     CollaborationModule,

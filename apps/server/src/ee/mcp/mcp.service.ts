@@ -25,10 +25,27 @@ import {
 import { BaseService } from '../base/base.service';
 import { SearchService } from '../../core/search/search.service';
 import { SearchDTO } from '../../core/search/dto/search.dto';
+import { CommentService } from '../../core/comment/comment.service';
+import { CommentRepo } from '@docmost/db/repos/comment/comment.repo';
+import { LabelService } from '../../core/label/label.service';
+import { LabelRepo, LabelType } from '@docmost/db/repos/label/label.repo';
+import { FavoriteService } from '../../core/favorite/services/favorite.service';
+import { FavoriteType } from '@docmost/db/repos/favorite/favorite.repo';
+import { PageHistoryService } from '../../core/page/services/page-history.service';
+import { BacklinkService } from '../../core/page/services/backlink.service';
+import { TemplateService } from '../template/template.service';
+import { SearchAttachmentsService } from '../search-attachments/search-attachments.service';
+import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
+import { ExportService } from '../../integrations/export/export.service';
+import { ExportFormat } from '../../integrations/export/dto/export-dto';
+import { WsService } from '../../ws/ws.service';
+import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
 import {
+  htmlToJson,
   jsonToHtml,
   jsonToMarkdown,
 } from '../../collaboration/collaboration.util';
+import { markdownToHtml } from '@docmost/editor-ext';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import {
@@ -72,6 +89,18 @@ export class McpService {
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly baseService: BaseService,
     private readonly searchService: SearchService,
+    private readonly commentService: CommentService,
+    private readonly commentRepo: CommentRepo,
+    private readonly labelService: LabelService,
+    private readonly labelRepo: LabelRepo,
+    private readonly favoriteService: FavoriteService,
+    private readonly pageHistoryService: PageHistoryService,
+    private readonly backlinkService: BacklinkService,
+    private readonly templateService: TemplateService,
+    private readonly searchAttachmentsService: SearchAttachmentsService,
+    private readonly attachmentRepo: AttachmentRepo,
+    private readonly exportService: ExportService,
+    private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -166,7 +195,471 @@ export class McpService {
   }
 
   private getToolsList() {
-    return [...this.getPageToolsList(), ...this.getBaseToolsList()];
+    return [
+      ...this.getPageToolsList(),
+      ...this.getBaseToolsList(),
+      ...this.getWorkspaceToolsList(),
+    ];
+  }
+
+  /**
+   * Comments, labels, favorites, history, page organization, templates,
+   * attachments and export.
+   */
+  private getWorkspaceToolsList() {
+    return [
+      // --- comments ---
+      {
+        name: 'list_page_comments',
+        description: 'List the comments on a page, newest first.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            limit: { type: 'number', description: 'Max comments. Defaults to 20.' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'get_comment',
+        description: 'Get a single comment by ID.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            commentId: { type: 'string', description: 'Comment ID' },
+          },
+          required: ['commentId'],
+        },
+      },
+      {
+        name: 'create_comment',
+        description:
+          'Add a comment to a page, or reply to an existing comment. Replies to a reply are not allowed.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            content: { type: 'string', description: 'Comment body in markdown' },
+            parentCommentId: {
+              type: 'string',
+              description: 'Optional comment ID to reply to',
+            },
+          },
+          required: ['pageId', 'content'],
+        },
+      },
+      {
+        name: 'update_comment',
+        description: 'Edit a comment. You can only edit your own comments.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            commentId: { type: 'string', description: 'Comment ID' },
+            content: { type: 'string', description: 'New comment body in markdown' },
+          },
+          required: ['commentId', 'content'],
+        },
+      },
+      {
+        name: 'delete_comment',
+        description:
+          'Delete a comment. You can delete your own comments; deleting someone else\'s requires space admin.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            commentId: { type: 'string', description: 'Comment ID' },
+          },
+          required: ['commentId'],
+        },
+      },
+
+      // --- labels ---
+      {
+        name: 'list_page_labels',
+        description: 'List the labels attached to a page.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            limit: { type: 'number', description: 'Max labels. Defaults to 20.' },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'add_page_labels',
+        description:
+          'Attach labels to a page, creating any that do not exist yet. Names may contain only lowercase letters, digits, hyphens, underscores and tildes, and cannot start with a tilde.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            names: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'Label names, up to 25 per call',
+            },
+          },
+          required: ['pageId', 'names'],
+        },
+      },
+      {
+        name: 'remove_page_label',
+        description: 'Detach a label from a page.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            labelId: { type: 'string', description: 'Label ID' },
+          },
+          required: ['pageId', 'labelId'],
+        },
+      },
+      {
+        name: 'list_labels',
+        description: 'List the page labels available in the workspace.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            limit: { type: 'number', description: 'Max labels. Defaults to 20.' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+          },
+        },
+      },
+      {
+        name: 'find_pages_by_label',
+        description:
+          'Find pages carrying a label, given either its ID or its name. Only pages the user can access are returned.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            labelId: { type: 'string', description: 'Label ID' },
+            name: { type: 'string', description: 'Label name, if the ID is unknown' },
+            spaceId: { type: 'string', description: 'Optional space to restrict to' },
+            limit: { type: 'number', description: 'Max pages. Defaults to 20.' },
+          },
+        },
+      },
+
+      // --- favorites ---
+      {
+        name: 'list_favorites',
+        description: 'List the authenticated user\'s favorites.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            type: {
+              type: 'string',
+              enum: ['page', 'space', 'template'],
+              description: 'Optional type filter',
+            },
+            spaceId: { type: 'string', description: 'Optional space filter' },
+            limit: { type: 'number', description: 'Max favorites. Defaults to 20.' },
+          },
+        },
+      },
+      {
+        name: 'add_favorite',
+        description:
+          'Favorite a page, space or template. Pass the ID matching the chosen type.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['page', 'space', 'template'] },
+            pageId: { type: 'string', description: 'Required when type is page' },
+            spaceId: { type: 'string', description: 'Required when type is space' },
+            templateId: { type: 'string', description: 'Required when type is template' },
+          },
+          required: ['type'],
+        },
+      },
+      {
+        name: 'remove_favorite',
+        description: 'Remove a page, space or template from the favorites.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            type: { type: 'string', enum: ['page', 'space', 'template'] },
+            pageId: { type: 'string', description: 'Required when type is page' },
+            spaceId: { type: 'string', description: 'Required when type is space' },
+            templateId: { type: 'string', description: 'Required when type is template' },
+          },
+          required: ['type'],
+        },
+      },
+
+      // --- history and trash ---
+      {
+        name: 'list_page_history',
+        description: 'List the saved versions of a page, newest first.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            limit: { type: 'number', description: 'Max versions. Defaults to 20.' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'get_page_version',
+        description:
+          'Get one saved version of a page, including its content. Content is markdown by default.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            historyId: { type: 'string', description: 'Version ID from list_page_history' },
+            format: {
+              type: 'string',
+              enum: ['markdown', 'html', 'json'],
+              description: 'Output format. Defaults to markdown.',
+            },
+          },
+          required: ['historyId'],
+        },
+      },
+      {
+        name: 'list_trash',
+        description: 'List the deleted pages of a space. Requires edit permission on the space.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            spaceId: { type: 'string', description: 'Space ID' },
+            limit: { type: 'number', description: 'Max pages. Defaults to 20.' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+          },
+          required: ['spaceId'],
+        },
+      },
+      {
+        name: 'restore_page',
+        description: 'Restore a page from the trash.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID of a trashed page' },
+          },
+          required: ['pageId'],
+        },
+      },
+
+      // --- page organization ---
+      {
+        name: 'move_page',
+        description:
+          'Move a page within its space: reparent it, reorder it, or both. Position is a fractional index string of 5 to 12 characters; read the siblings with list_pages and pick a value that sorts where you want the page to land.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID to move' },
+            position: { type: 'string', description: 'New fractional index position' },
+            parentPageId: {
+              type: 'string',
+              description: 'New parent page ID. Omit to keep the current parent.',
+            },
+          },
+          required: ['pageId', 'position'],
+        },
+      },
+      {
+        name: 'move_page_to_space',
+        description:
+          'Move a page and its subtree to another space. Child pages the user cannot access stay behind as root pages in the original space.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID to move' },
+            spaceId: { type: 'string', description: 'Destination space ID' },
+          },
+          required: ['pageId', 'spaceId'],
+        },
+      },
+      {
+        name: 'duplicate_page',
+        description:
+          'Duplicate a page and its subtree, in the same space or into another one. Inaccessible child branches are skipped.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID to duplicate' },
+            spaceId: {
+              type: 'string',
+              description: 'Destination space ID. Omit to duplicate in place.',
+            },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'get_page_breadcrumbs',
+        description: 'Get the ancestor chain of a page, from the root down.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'get_page_backlinks',
+        description:
+          'List pages linking to this page (incoming) or linked from it (outgoing).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            direction: {
+              type: 'string',
+              enum: ['incoming', 'outgoing'],
+              description: 'Link direction. Defaults to incoming.',
+            },
+            limit: { type: 'number', description: 'Max links. Defaults to 20.' },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'list_recent_pages',
+        description:
+          'List recently updated pages, across the user\'s spaces or within one space.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            spaceId: { type: 'string', description: 'Optional space filter' },
+            limit: { type: 'number', description: 'Max pages. Defaults to 20.' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+          },
+        },
+      },
+
+      // --- templates ---
+      {
+        name: 'list_templates',
+        description:
+          'List the templates the user can reach: workspace-wide ones plus those in their spaces.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            spaceId: { type: 'string', description: 'Optional space filter' },
+            limit: { type: 'number', description: 'Max templates. Defaults to 20.' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+          },
+        },
+      },
+      {
+        name: 'get_template',
+        description: 'Get a template with its content.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            templateId: { type: 'string', description: 'Template ID' },
+          },
+          required: ['templateId'],
+        },
+      },
+      {
+        name: 'create_template',
+        description:
+          'Create a template. Scoped to a space when spaceId is given, otherwise workspace-wide, which requires workspace settings permission.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string', description: 'Template title' },
+            content: { type: 'string', description: 'Template body in markdown' },
+            description: { type: 'string', description: 'Optional description' },
+            icon: { type: 'string', description: 'Optional icon' },
+            spaceId: { type: 'string', description: 'Optional space to scope it to' },
+          },
+          required: ['title'],
+        },
+      },
+      {
+        name: 'update_template',
+        description: 'Update a template title, description, icon or content.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            templateId: { type: 'string', description: 'Template ID' },
+            title: { type: 'string', description: 'Optional new title' },
+            content: { type: 'string', description: 'Optional new body in markdown' },
+            description: { type: 'string', description: 'Optional new description' },
+            icon: { type: 'string', description: 'Optional new icon' },
+          },
+          required: ['templateId'],
+        },
+      },
+      {
+        name: 'delete_template',
+        description: 'Delete a template.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            templateId: { type: 'string', description: 'Template ID' },
+          },
+          required: ['templateId'],
+        },
+      },
+      {
+        name: 'use_template',
+        description: 'Create a new page in a space from a template.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            templateId: { type: 'string', description: 'Template ID' },
+            spaceId: { type: 'string', description: 'Space to create the page in' },
+            parentPageId: { type: 'string', description: 'Optional parent page ID' },
+          },
+          required: ['templateId', 'spaceId'],
+        },
+      },
+
+      // --- attachments and export ---
+      {
+        name: 'search_attachments',
+        description:
+          'Full-text search inside the content of uploaded files, across the spaces the user can access. Returns the file and the page it is attached to.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Search term' },
+            spaceId: { type: 'string', description: 'Optional space to restrict to' },
+          },
+          required: ['query'],
+        },
+      },
+      {
+        name: 'get_attachment_info',
+        description: 'Get the metadata of an uploaded file.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            attachmentId: { type: 'string', description: 'Attachment ID' },
+          },
+          required: ['attachmentId'],
+        },
+      },
+      {
+        name: 'export_page',
+        description:
+          'Export a single page as markdown or html, with internal links rewritten. Exports covering child pages or attachments produce a zip archive and are not available over MCP — read children individually with get_page instead.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            format: {
+              type: 'string',
+              enum: ['markdown', 'html'],
+              description: 'Export format. Defaults to markdown.',
+            },
+          },
+          required: ['pageId'],
+        },
+      },
+    ];
   }
 
   private getPageToolsList() {
@@ -894,6 +1387,752 @@ export class McpService {
     }
   }
 
+  private async callWorkspaceTool(
+    name: string,
+    args: any,
+    user: User,
+    workspace: Workspace,
+  ) {
+    switch (name) {
+      // --- comments ---
+      case 'list_page_comments': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        return this.commentService.findByPageId(
+          page.id,
+          this.pagination(args),
+        );
+      }
+
+      case 'get_comment': {
+        const { comment } = await this.getCommentInWorkspace(
+          args.commentId,
+          workspace,
+        );
+        return comment;
+      }
+
+      case 'create_comment': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanComment(
+          page,
+          user,
+          workspace.id,
+        );
+
+        const comment = await this.commentService.create(
+          { page, workspaceId: workspace.id, user },
+          {
+            pageId: page.id,
+            content: await this.markdownToCommentContent(args.content),
+            parentCommentId: args.parentCommentId,
+            type: 'page',
+          } as any,
+        );
+
+        this.auditService.log({
+          event: AuditEvent.COMMENT_CREATED,
+          resourceType: AuditResource.COMMENT,
+          resourceId: comment.id,
+          spaceId: page.spaceId,
+          metadata: { pageId: page.id },
+        });
+
+        return comment;
+      }
+
+      case 'update_comment': {
+        const { comment, page } = await this.getCommentInWorkspace(
+          args.commentId,
+          workspace,
+        );
+        await this.pageAccessService.validateCanComment(
+          page,
+          user,
+          workspace.id,
+        );
+
+        // commentService.update rejects editing someone else's comment
+        return this.commentService.update(
+          comment,
+          {
+            commentId: comment.id,
+            content: await this.markdownToCommentContent(args.content),
+          },
+          user,
+        );
+      }
+
+      case 'delete_comment': {
+        const { comment, page } = await this.getCommentInWorkspace(
+          args.commentId,
+          workspace,
+        );
+        await this.pageAccessService.validateCanComment(
+          page,
+          user,
+          workspace.id,
+        );
+
+        if (comment.creatorId !== user.id) {
+          const ability = await this.spaceAbility.createForUser(
+            user,
+            comment.spaceId,
+          );
+          if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
+            throw new ForbiddenException('You can only delete your own comments');
+          }
+        }
+
+        await this.commentRepo.deleteComment(comment.id);
+
+        this.wsService.emitCommentEvent(comment.spaceId, comment.pageId, {
+          operation: 'commentDeleted',
+          pageId: comment.pageId,
+          commentId: comment.id,
+        });
+
+        this.auditService.log({
+          event: AuditEvent.COMMENT_DELETED,
+          resourceType: AuditResource.COMMENT,
+          resourceId: comment.id,
+          spaceId: comment.spaceId,
+          changes: {
+            before: { pageId: comment.pageId, creatorId: comment.creatorId },
+          },
+        });
+
+        return { success: true, commentId: comment.id };
+      }
+
+      // --- labels ---
+      case 'list_page_labels': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        return this.labelService.getPageLabels(page.id, this.pagination(args));
+      }
+
+      case 'add_page_labels': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanEdit(page, user);
+
+        if (!Array.isArray(args.names) || args.names.length === 0) {
+          throw new BadRequestException('names must be a non-empty array');
+        }
+
+        return {
+          labels: await this.labelService.addLabelsToPage(
+            page.id,
+            args.names,
+            workspace.id,
+          ),
+        };
+      }
+
+      case 'remove_page_label': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanEdit(page, user);
+
+        await this.labelService.removeLabelFromPage(
+          page.id,
+          args.labelId,
+          workspace.id,
+        );
+        return { success: true, labelId: args.labelId };
+      }
+
+      case 'list_labels': {
+        return this.labelService.getLabels(
+          workspace.id,
+          user.id,
+          LabelType.PAGE,
+          this.pagination(args),
+        );
+      }
+
+      case 'find_pages_by_label': {
+        if (args.spaceId) {
+          const ability = await this.spaceAbility.createForUser(
+            user,
+            args.spaceId,
+          );
+          if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+            throw new ForbiddenException();
+          }
+        }
+
+        const labelId = await this.resolveLabelId(args, workspace);
+        if (!labelId) {
+          return { items: [] };
+        }
+
+        return this.labelService.findPagesByLabel(labelId, user.id, {
+          spaceId: args.spaceId,
+          pagination: this.pagination(args),
+        });
+      }
+
+      // --- favorites ---
+      case 'list_favorites': {
+        return this.favoriteService.getUserFavorites(
+          user.id,
+          workspace.id,
+          this.pagination(args),
+          args.type as FavoriteType | undefined,
+          args.spaceId,
+        );
+      }
+
+      case 'add_favorite': {
+        const target = await this.resolveFavoriteTarget(args, user, workspace);
+
+        await this.favoriteService.addFavorite(user.id, workspace.id, {
+          type: args.type,
+          pageId: args.pageId,
+          spaceId: args.type === 'space' ? target.spaceId : undefined,
+          templateId: args.templateId,
+        });
+
+        return { success: true };
+      }
+
+      case 'remove_favorite': {
+        await this.resolveFavoriteTarget(args, user, workspace);
+
+        await this.favoriteService.removeFavorite(user.id, {
+          type: args.type,
+          pageId: args.pageId,
+          spaceId: args.spaceId,
+          templateId: args.templateId,
+        });
+
+        return { success: true };
+      }
+
+      // --- history and trash ---
+      case 'list_page_history': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        return this.pageHistoryService.findHistoryByPageId(
+          page.id,
+          this.pagination(args),
+        );
+      }
+
+      case 'get_page_version': {
+        const history = await this.pageHistoryService.findById(args.historyId);
+        if (!history) {
+          throw new NotFoundException('Page version not found');
+        }
+
+        const page = await this.getPageInWorkspace(history.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        const format = args.format || 'markdown';
+
+        return {
+          ...history,
+          format,
+          content: this.renderPageContent(history.content, format),
+        };
+      }
+
+      case 'list_trash': {
+        if (!args.spaceId) {
+          throw new BadRequestException('spaceId is required');
+        }
+
+        const ability = await this.spaceAbility.createForUser(
+          user,
+          args.spaceId,
+        );
+        if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+          throw new ForbiddenException();
+        }
+
+        return this.pageService.getDeletedSpacePages(
+          args.spaceId,
+          user.id,
+          this.pagination(args),
+        );
+      }
+
+      case 'restore_page': {
+        // findById without the deletedAt guard: the page is in the trash
+        const page = await this.pageRepo.findById(args.pageId);
+        if (!page || page.workspaceId !== workspace.id) {
+          throw new NotFoundException('Page not found');
+        }
+
+        const ability = await this.spaceAbility.createForUser(
+          user,
+          page.spaceId,
+        );
+        if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+          throw new ForbiddenException();
+        }
+        await this.pageAccessService.validateCanEdit(page, user);
+
+        await this.pageRepo.restorePage(page.id, workspace.id);
+
+        this.auditService.log({
+          event: AuditEvent.PAGE_RESTORED,
+          resourceType: AuditResource.PAGE,
+          resourceId: page.id,
+          spaceId: page.spaceId,
+          changes: {
+            after: {
+              title: getPageTitle(page.title),
+              spaceId: page.spaceId,
+            },
+          },
+        });
+
+        return { success: true, pageId: page.id };
+      }
+
+      // --- page organization ---
+      case 'move_page': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+
+        const ability = await this.spaceAbility.createForUser(
+          user,
+          page.spaceId,
+        );
+        if (ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page)) {
+          throw new ForbiddenException();
+        }
+        await this.pageAccessService.validateCanEdit(page, user);
+
+        if (args.parentPageId && args.parentPageId !== page.parentPageId) {
+          const targetParent = await this.getPageInWorkspace(
+            args.parentPageId,
+            workspace,
+          );
+          await this.pageAccessService.validateCanEdit(targetParent, user);
+        }
+
+        await this.pageService.movePage(
+          {
+            pageId: page.id,
+            position: args.position,
+            parentPageId: args.parentPageId,
+          },
+          page,
+        );
+
+        return { success: true, pageId: page.id };
+      }
+
+      case 'move_page_to_space': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+
+        if (page.spaceId === args.spaceId) {
+          throw new BadRequestException('Page is already in this space');
+        }
+
+        const abilities = await Promise.all([
+          this.spaceAbility.createForUser(user, page.spaceId),
+          this.spaceAbility.createForUser(user, args.spaceId),
+        ]);
+        if (
+          abilities.some((ability) =>
+            ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
+          )
+        ) {
+          throw new ForbiddenException();
+        }
+        await this.pageAccessService.validateCanEdit(page, user);
+
+        const { childPageIds } = await this.pageService.movePageToSpace(
+          page,
+          args.spaceId,
+          user.id,
+        );
+
+        this.auditService.log({
+          event: AuditEvent.PAGE_MOVED_TO_SPACE,
+          resourceType: AuditResource.PAGE,
+          resourceId: page.id,
+          spaceId: page.spaceId,
+          changes: {
+            before: { spaceId: page.spaceId },
+            after: { spaceId: args.spaceId },
+          },
+          metadata: {
+            title: getPageTitle(page.title),
+            ...(childPageIds.length > 0 && { childPageIds }),
+          },
+        });
+
+        return { success: true, pageId: page.id, leftBehind: childPageIds };
+      }
+
+      case 'duplicate_page': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        const targetSpaceId = args.spaceId;
+        const spaceIdsToCheck = targetSpaceId
+          ? [page.spaceId, targetSpaceId]
+          : [page.spaceId];
+
+        const abilities = await Promise.all(
+          spaceIdsToCheck.map((spaceId) =>
+            this.spaceAbility.createForUser(user, spaceId),
+          ),
+        );
+        if (
+          abilities.some((ability) =>
+            ability.cannot(SpaceCaslAction.Edit, SpaceCaslSubject.Page),
+          )
+        ) {
+          throw new ForbiddenException();
+        }
+
+        const result = await this.pageService.duplicatePage(
+          page,
+          targetSpaceId,
+          user,
+        );
+
+        this.auditService.log({
+          event: AuditEvent.PAGE_DUPLICATED,
+          resourceType: AuditResource.PAGE,
+          resourceId: result.id,
+          spaceId: targetSpaceId || page.spaceId,
+          metadata: {
+            sourcePageId: page.id,
+            title: getPageTitle(page.title),
+            ...(result.childPageIds.length > 0 && {
+              childPageIds: result.childPageIds,
+            }),
+          },
+        });
+
+        return result;
+      }
+
+      case 'get_page_breadcrumbs': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        return { breadcrumbs: await this.pageService.getPageBreadCrumbs(page.id) };
+      }
+
+      case 'get_page_backlinks': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        return this.backlinkService.findByPageId(
+          page.id,
+          args.direction === 'outgoing' ? 'outgoing' : 'incoming',
+          user.id,
+          this.pagination(args),
+        );
+      }
+
+      case 'list_recent_pages': {
+        if (args.spaceId) {
+          const ability = await this.spaceAbility.createForUser(
+            user,
+            args.spaceId,
+          );
+          if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+            throw new ForbiddenException();
+          }
+
+          return this.pageService.getRecentSpacePages(
+            args.spaceId,
+            user.id,
+            this.pagination(args),
+          );
+        }
+
+        return this.pageService.getRecentPages(user.id, this.pagination(args));
+      }
+
+      // --- templates ---
+      case 'list_templates': {
+        return this.templateService.listTemplates(
+          { ...this.pagination(args), spaceId: args.spaceId },
+          user,
+          workspace,
+        );
+      }
+
+      case 'get_template': {
+        return this.templateService.getTemplate(
+          args.templateId,
+          user,
+          workspace,
+        );
+      }
+
+      case 'create_template': {
+        return this.templateService.createTemplate(
+          {
+            title: args.title,
+            description: args.description,
+            icon: args.icon,
+            content: args.content
+              ? await this.markdownToProsemirror(args.content)
+              : undefined,
+            spaceId: args.spaceId,
+          },
+          user,
+          workspace,
+        );
+      }
+
+      case 'update_template': {
+        return this.templateService.updateTemplate(
+          {
+            templateId: args.templateId,
+            title: args.title,
+            description: args.description,
+            icon: args.icon,
+            content: args.content
+              ? await this.markdownToProsemirror(args.content)
+              : undefined,
+          },
+          user,
+          workspace,
+        );
+      }
+
+      case 'delete_template': {
+        await this.templateService.deleteTemplate(
+          args.templateId,
+          user,
+          workspace,
+        );
+        return { success: true, templateId: args.templateId };
+      }
+
+      case 'use_template': {
+        return this.templateService.useTemplate(
+          {
+            templateId: args.templateId,
+            spaceId: args.spaceId,
+            parentPageId: args.parentPageId,
+          },
+          user,
+          workspace,
+        );
+      }
+
+      // --- attachments and export ---
+      case 'search_attachments': {
+        if (!args.query) {
+          throw new BadRequestException('query is required');
+        }
+
+        if (args.spaceId) {
+          const ability = await this.spaceAbility.createForUser(
+            user,
+            args.spaceId,
+          );
+          if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+            throw new ForbiddenException();
+          }
+        }
+
+        // The attachment search itself is not space-scoped, so filter here.
+        const { items } = await this.searchAttachmentsService.search(
+          args.query,
+          workspace.id,
+          args.spaceId,
+        );
+
+        const spaceIds = new Set(
+          await this.spaceMemberRepo.getUserSpaceIds(user.id),
+        );
+        const inUserSpaces = items.filter((item: any) =>
+          spaceIds.has(item.spaceId),
+        );
+
+        const accessiblePageIds = new Set(
+          await this.pagePermissionRepo.filterAccessiblePageIds({
+            pageIds: [
+              ...new Set(inUserSpaces.map((item: any) => item.pageId)),
+            ] as string[],
+            userId: user.id,
+            spaceId: args.spaceId,
+          }),
+        );
+
+        return {
+          items: inUserSpaces.filter((item: any) =>
+            accessiblePageIds.has(item.pageId),
+          ),
+        };
+      }
+
+      case 'get_attachment_info': {
+        const attachment = await this.attachmentRepo.findById(
+          args.attachmentId,
+        );
+        if (
+          !attachment ||
+          !attachment.pageId ||
+          attachment.workspaceId !== workspace.id
+        ) {
+          throw new NotFoundException('File not found');
+        }
+
+        const page = await this.getPageInWorkspace(
+          attachment.pageId,
+          workspace,
+        );
+        await this.pageAccessService.validateCanView(page, user);
+
+        return attachment;
+      }
+
+      case 'export_page': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+
+        const format = (args.format || 'markdown') as ExportFormat;
+
+        const result = await this.exportService.exportPages(
+          page.id,
+          format,
+          false,
+          false,
+          user.id,
+        );
+
+        this.auditService.log({
+          event: AuditEvent.PAGE_EXPORTED,
+          resourceType: AuditResource.PAGE,
+          resourceId: page.id,
+          spaceId: page.spaceId,
+          metadata: {
+            title: getPageTitle(page.title),
+            format,
+            includeChildren: false,
+            includeAttachments: false,
+            spaceId: page.spaceId,
+          },
+        });
+
+        if (result.type !== 'file') {
+          throw new BadRequestException(
+            'This export produced an archive, which cannot be returned over MCP',
+          );
+        }
+
+        return result.content;
+      }
+
+      default:
+        throw new BadRequestException(`Unknown tool: ${name}`);
+    }
+  }
+
+  private pagination(args: any): PaginationOptions {
+    return {
+      limit: Math.min(args.limit || 20, 100),
+      cursor: args.cursor,
+    } as PaginationOptions;
+  }
+
+  /** Comment bodies are stored as ProseMirror, but agents write markdown. */
+  private async markdownToProsemirror(markdown: string) {
+    const html = await markdownToHtml(markdown);
+    return htmlToJson(html as string);
+  }
+
+  private async markdownToCommentContent(markdown: string): Promise<string> {
+    if (typeof markdown !== 'string') {
+      throw new BadRequestException('content must be a markdown string');
+    }
+    return JSON.stringify(await this.markdownToProsemirror(markdown));
+  }
+
+  private async getCommentInWorkspace(commentId: string, workspace: Workspace) {
+    if (!commentId) {
+      throw new BadRequestException('commentId is required');
+    }
+
+    const comment = await this.commentRepo.findById(commentId);
+    if (!comment || comment.workspaceId !== workspace.id) {
+      throw new NotFoundException('Comment not found');
+    }
+
+    const page = await this.getPageInWorkspace(comment.pageId, workspace);
+    return { comment, page };
+  }
+
+  private async resolveLabelId(
+    args: any,
+    workspace: Workspace,
+  ): Promise<string | null> {
+    if (args.labelId) {
+      const label = await this.labelRepo.findById(args.labelId);
+      if (!label || label.workspaceId !== workspace.id) {
+        throw new NotFoundException('Label not found');
+      }
+      return label.id;
+    }
+
+    if (!args.name) {
+      throw new BadRequestException('labelId or name is required');
+    }
+
+    const label = await this.labelRepo.findByNameAndWorkspace(
+      args.name,
+      workspace.id,
+      LabelType.PAGE,
+    );
+
+    return label?.id ?? null;
+  }
+
+  /**
+   * Mirrors FavoriteController.resolveAndValidate: a favorite must point at
+   * something the user can actually reach.
+   */
+  private async resolveFavoriteTarget(
+    args: any,
+    user: User,
+    workspace: Workspace,
+  ): Promise<{ spaceId: string }> {
+    if (args.type === 'page') {
+      const page = await this.getPageInWorkspace(args.pageId, workspace);
+      await this.pageAccessService.validateCanView(page, user);
+      return { spaceId: page.spaceId };
+    }
+
+    if (args.type === 'space') {
+      if (!args.spaceId) {
+        throw new BadRequestException('spaceId is required');
+      }
+      // createForUser throws when the user is not a member
+      await this.spaceAbility.createForUser(user, args.spaceId);
+      return { spaceId: args.spaceId };
+    }
+
+    if (args.type === 'template') {
+      if (!args.templateId) {
+        throw new BadRequestException('templateId is required');
+      }
+      const template = await this.templateService.getTemplate(
+        args.templateId,
+        user,
+        workspace,
+      );
+      return { spaceId: template.spaceId };
+    }
+
+    throw new BadRequestException('Invalid favorite type');
+  }
+
   private async callBaseTool(
     name: string,
     args: any,
@@ -1143,7 +2382,7 @@ export class McpService {
       }
 
       default:
-        throw new BadRequestException(`Unknown tool: ${name}`);
+        return this.callWorkspaceTool(name, args, user, workspace);
     }
   }
 

@@ -33,21 +33,52 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     spaceAbility: { createForUser: jest.fn() },
     baseService: { createBase: jest.fn() },
     searchService: { searchPage: jest.fn().mockResolvedValue({ items: [] }) },
+    commentService: { create: jest.fn(), update: jest.fn(), findByPageId: jest.fn() },
+    commentRepo: { findById: jest.fn(), deleteComment: jest.fn() },
+    labelService: {
+      getPageLabels: jest.fn(),
+      addLabelsToPage: jest.fn(),
+      removeLabelFromPage: jest.fn(),
+    },
+    labelRepo: { findById: jest.fn(), findByNameAndWorkspace: jest.fn() },
+    favoriteService: { addFavorite: jest.fn(), removeFavorite: jest.fn() },
+    pageHistoryService: { findById: jest.fn(), findHistoryByPageId: jest.fn() },
+    backlinkService: { findByPageId: jest.fn() },
+    templateService: { getTemplate: jest.fn(), useTemplate: jest.fn() },
+    searchAttachmentsService: { search: jest.fn() },
+    attachmentRepo: { findById: jest.fn() },
+    exportService: { exportPages: jest.fn() },
+    wsService: { emitCommentEvent: jest.fn() },
     auditService: { log: jest.fn() },
     ...overrides,
   };
 
+  // Keep in sync with the McpService constructor order.
   const service = new McpService(
-    deps.db as any,
-    deps.pageService as any,
-    deps.pageRepo as any,
-    deps.pageAccessService as any,
-    deps.pagePermissionRepo as any,
-    deps.spaceMemberRepo as any,
-    deps.spaceAbility as any,
-    deps.baseService as any,
-    deps.searchService as any,
-    deps.auditService as any,
+    ...([
+      'db',
+      'pageService',
+      'pageRepo',
+      'pageAccessService',
+      'pagePermissionRepo',
+      'spaceMemberRepo',
+      'spaceAbility',
+      'baseService',
+      'searchService',
+      'commentService',
+      'commentRepo',
+      'labelService',
+      'labelRepo',
+      'favoriteService',
+      'pageHistoryService',
+      'backlinkService',
+      'templateService',
+      'searchAttachmentsService',
+      'attachmentRepo',
+      'exportService',
+      'wsService',
+      'auditService',
+    ].map((key) => deps[key]) as ConstructorParameters<typeof McpService>),
   );
 
   return { service, deps };
@@ -265,6 +296,118 @@ describe('McpService permissions', () => {
     );
   });
 
+  it('create_comment converts markdown and requires comment access', async () => {
+    const { service, deps } = buildService();
+    deps.commentService.create.mockResolvedValue({ id: 'comment-1' });
+    deps.pageAccessService.validateCanComment = jest.fn();
+
+    await callTool(service, 'create_comment', {
+      pageId: 'page-1',
+      content: 'hello **world**',
+    });
+
+    expect(deps.pageAccessService.validateCanComment).toHaveBeenCalledWith(
+      page,
+      user,
+      'workspace-1',
+    );
+
+    const [, dto] = deps.commentService.create.mock.calls[0];
+    const parsed = JSON.parse(dto.content);
+    expect(parsed.type).toBe('doc');
+  });
+
+  it('comment tools reject a comment from another workspace', async () => {
+    const { service, deps } = buildService();
+    deps.commentRepo.findById.mockResolvedValue({
+      id: 'comment-1',
+      pageId: 'page-1',
+      workspaceId: 'other-workspace',
+    });
+
+    const res: any = await callTool(service, 'get_comment', {
+      commentId: 'comment-1',
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(res.result.content[0].text).toContain('Comment not found');
+  });
+
+  it('delete_comment lets a non-owner through only as space admin', async () => {
+    const { service, deps } = buildService();
+    deps.pageAccessService.validateCanComment = jest.fn();
+    deps.commentRepo.findById.mockResolvedValue({
+      id: 'comment-1',
+      pageId: 'page-1',
+      spaceId: 'space-1',
+      workspaceId: 'workspace-1',
+      creatorId: 'someone-else',
+    });
+    deps.spaceAbility.createForUser.mockResolvedValue({ cannot: () => true });
+
+    const res: any = await callTool(service, 'delete_comment', {
+      commentId: 'comment-1',
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(deps.commentRepo.deleteComment).not.toHaveBeenCalled();
+  });
+
+  it('restore_page requires space edit permission', async () => {
+    const { service, deps } = buildService();
+    deps.pageRepo.findById.mockResolvedValue({
+      ...page,
+      deletedAt: new Date(),
+    });
+    deps.pageRepo.restorePage = jest.fn();
+    deps.spaceAbility.createForUser.mockResolvedValue({ cannot: () => true });
+
+    const res: any = await callTool(service, 'restore_page', {
+      pageId: 'page-1',
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(deps.pageRepo.restorePage).not.toHaveBeenCalled();
+  });
+
+  it('move_page_to_space requires edit on both spaces', async () => {
+    const { service, deps } = buildService();
+    deps.pageService.movePageToSpace = jest.fn();
+    deps.spaceAbility.createForUser
+      .mockResolvedValueOnce({ cannot: () => false })
+      .mockResolvedValueOnce({ cannot: () => true });
+
+    const res: any = await callTool(service, 'move_page_to_space', {
+      pageId: 'page-1',
+      spaceId: 'space-2',
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(deps.pageService.movePageToSpace).not.toHaveBeenCalled();
+  });
+
+  it('search_attachments drops results outside the user spaces', async () => {
+    const { service, deps } = buildService();
+    deps.searchAttachmentsService.search.mockResolvedValue({
+      items: [
+        { id: 'a1', pageId: 'page-1', spaceId: 'space-1' },
+        { id: 'a2', pageId: 'page-9', spaceId: 'space-secret' },
+      ],
+    });
+    deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
+    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue([
+      'page-1',
+    ]);
+
+    const res: any = await callTool(service, 'search_attachments', {
+      query: 'report',
+    });
+
+    const body = JSON.parse(res.result.content[0].text);
+    expect(body.items).toHaveLength(1);
+    expect(body.items[0].id).toBe('a1');
+  });
+
   it('exposes the page and base tool surface', async () => {
     const { service } = buildService();
 
@@ -276,7 +419,14 @@ describe('McpService permissions', () => {
 
     const names = res.result.tools.map((tool: any) => tool.name);
 
-    expect(names).toEqual(expect.arrayContaining(['get_page', 'create_base_row']));
+    expect(names).toEqual(
+      expect.arrayContaining([
+        'get_page',
+        'create_base_row',
+        'create_comment',
+        'use_template',
+      ]),
+    );
     expect(new Set(names).size).toBe(names.length);
   });
 
