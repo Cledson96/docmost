@@ -36,6 +36,9 @@ import { BacklinkService } from '../../core/page/services/backlink.service';
 import { TemplateService } from '../template/template.service';
 import { SearchAttachmentsService } from '../search-attachments/search-attachments.service';
 import { AttachmentRepo } from '@docmost/db/repos/attachment/attachment.repo';
+import { AttachmentService } from '../../core/attachment/services/attachment.service';
+import { MultipartFile } from '@fastify/multipart';
+import { Readable } from 'stream';
 import { ExportService } from '../../integrations/export/export.service';
 import { ExportFormat } from '../../integrations/export/dto/export-dto';
 import { WsService } from '../../ws/ws.service';
@@ -44,7 +47,9 @@ import {
   htmlToJson,
   jsonToHtml,
   jsonToMarkdown,
+  jsonToText,
 } from '../../collaboration/collaboration.util';
+import { sql } from 'kysely';
 import { markdownToHtml } from '@docmost/editor-ext';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
@@ -77,6 +82,10 @@ const BASE_PROPERTY_TYPES = [
 
 const BASE_VIEW_TYPES = ['table', 'kanban', 'calendar'];
 
+/** Base64 is ~4/3 the size of the bytes it encodes. */
+const MAX_UPLOAD_BYTES = 2 * 1024 * 1024;
+const MAX_UPLOAD_BASE64_CHARS = Math.ceil((MAX_UPLOAD_BYTES * 4) / 3);
+
 @Injectable()
 export class McpService {
   constructor(
@@ -99,6 +108,7 @@ export class McpService {
     private readonly templateService: TemplateService,
     private readonly searchAttachmentsService: SearchAttachmentsService,
     private readonly attachmentRepo: AttachmentRepo,
+    private readonly attachmentService: AttachmentService,
     private readonly exportService: ExportService,
     private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
@@ -643,6 +653,30 @@ export class McpService {
         },
       },
       {
+        name: 'upload_attachment',
+        description:
+          'Attach a file or image to a page, sent as base64. Meant for small artefacts the agent produces: screenshots, diagrams, generated CSVs. Base64 inflates payloads by about a third and everything sent here passes through the model context, so the cap is deliberately low — upload large documents through the web UI instead. Returns the attachment ID and its URL.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            pageId: {
+              type: 'string',
+              description: 'Page to attach the file to. Requires edit access.',
+            },
+            fileName: {
+              type: 'string',
+              description:
+                'File name including extension, e.g. "diagrama.png". The extension decides the content type.',
+            },
+            contentBase64: {
+              type: 'string',
+              description: 'File bytes, base64 encoded, without a data: URI prefix',
+            },
+          },
+          required: ['pageId', 'fileName', 'contentBase64'],
+        },
+      },
+      {
         name: 'export_page',
         description:
           'Export a single page as markdown or html, with internal links rewritten. Exports covering child pages or attachments produce a zip archive and are not available over MCP — read children individually with get_page instead.',
@@ -771,6 +805,26 @@ export class McpService {
    */
   private getBaseToolsList() {
     return [
+      {
+        name: 'search_everything',
+        description:
+          'Broad keyword sweep across the whole workspace in one call: pages (title and body), kanban / table rows, comments and uploaded files. Use this first when you do not know where something lives. Pages are ranked by relevance; rows and comments are plain substring matches, so they carry no ranking.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: { type: 'string', description: 'Keyword or phrase' },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space to restrict the whole sweep to',
+            },
+            limitPerType: {
+              type: 'number',
+              description: 'Max hits per category. Defaults to 10.',
+            },
+          },
+          required: ['query'],
+        },
+      },
       {
         name: 'create_base',
         description:
@@ -1993,6 +2047,60 @@ export class McpService {
         return attachment;
       }
 
+      case 'upload_attachment': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanEdit(page, user);
+
+        const buffer = this.decodeBase64Upload(args.contentBase64);
+        const fileName = String(args.fileName || '').trim();
+        if (!fileName || !fileName.includes('.')) {
+          throw new BadRequestException(
+            'fileName must include an extension, e.g. "diagrama.png"',
+          );
+        }
+
+        // prepareFile is called with skipBuffer, so it only reads `filename`,
+        // and uploadFile consumes `file` as a stream. A Readable over the
+        // decoded bytes satisfies both without touching attachment.service.
+        const multipartLike = {
+          filename: fileName,
+          file: Readable.from(buffer),
+        } as unknown as MultipartFile;
+
+        const attachment = await this.attachmentService.uploadFile({
+          filePromise: Promise.resolve(multipartLike),
+          pageId: page.id,
+          spaceId: page.spaceId,
+          userId: user.id,
+          workspaceId: workspace.id,
+        });
+
+        if (!attachment) {
+          throw new BadRequestException('Error processing file upload');
+        }
+
+        this.auditService.log({
+          event: AuditEvent.ATTACHMENT_UPLOADED,
+          resourceType: AuditResource.ATTACHMENT,
+          resourceId: attachment.id,
+          spaceId: page.spaceId,
+          metadata: {
+            fileName: attachment.fileName,
+            pageId: page.id,
+            spaceId: page.spaceId,
+          },
+        });
+
+        return {
+          success: true,
+          attachmentId: attachment.id,
+          fileName: attachment.fileName,
+          fileSize: attachment.fileSize,
+          mimeType: attachment.mimeType,
+          url: `/api/files/${attachment.id}/${attachment.fileName}`,
+        };
+      }
+
       case 'export_page': {
         const page = await this.getPageInWorkspace(args.pageId, workspace);
         await this.pageAccessService.validateCanView(page, user);
@@ -2033,6 +2141,41 @@ export class McpService {
       default:
         throw new BadRequestException(`Unknown tool: ${name}`);
     }
+  }
+
+  /**
+   * Base64 travels through the model context, so the ceiling here is about
+   * what is sane to put in a prompt, not what the server could store.
+   */
+  private decodeBase64Upload(input: unknown): Buffer {
+    if (typeof input !== 'string' || input.trim() === '') {
+      throw new BadRequestException('contentBase64 is required');
+    }
+
+    // Tolerate a data: URI even though the schema asks for raw base64 —
+    // models produce them often enough that rejecting is just friction.
+    const payload = input.replace(/^data:[^;]+;base64,/, '').trim();
+
+    if (payload.length > MAX_UPLOAD_BASE64_CHARS) {
+      throw new BadRequestException(
+        `File too large for MCP upload (limit ~${MAX_UPLOAD_BYTES / (1024 * 1024)}MB). Upload it through the web UI instead.`,
+      );
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = Buffer.from(payload, 'base64');
+    } catch {
+      throw new BadRequestException('contentBase64 is not valid base64');
+    }
+
+    // Buffer.from silently drops invalid characters, so an empty result is
+    // the only signal that the input was not really base64.
+    if (buffer.length === 0) {
+      throw new BadRequestException('contentBase64 decoded to an empty file');
+    }
+
+    return buffer;
   }
 
   private pagination(args: any): PaginationOptions {
@@ -2140,6 +2283,10 @@ export class McpService {
     workspace: Workspace,
   ) {
     switch (name) {
+      case 'search_everything': {
+        return this.searchEverything(args, user, workspace);
+      }
+
       case 'create_base': {
         const spaceId = await this.resolveBaseSpaceId(args, workspace, user);
 
@@ -2384,6 +2531,243 @@ export class McpService {
       default:
         return this.callWorkspaceTool(name, args, user, workspace);
     }
+  }
+
+  /**
+   * One keyword, every corner of the workspace.
+   *
+   * Pages and attachments go through the Postgres full-text index. Base rows
+   * and comments have no usable index for this (base rows have no tsv column
+   * at all), so they fall back to a substring match over the accessible set —
+   * unranked, but it beats being invisible.
+   */
+  private async searchEverything(args: any, user: User, workspace: Workspace) {
+    if (!args.query) {
+      throw new BadRequestException('query is required');
+    }
+
+    const limit = Math.min(args.limitPerType || 10, 50);
+
+    if (args.spaceId) {
+      const ability = await this.spaceAbility.createForUser(user, args.spaceId);
+      if (ability.cannot(SpaceCaslAction.Read, SpaceCaslSubject.Page)) {
+        throw new ForbiddenException();
+      }
+    }
+
+    const spaceIds = args.spaceId
+      ? [args.spaceId]
+      : await this.spaceMemberRepo.getUserSpaceIds(user.id);
+
+    if (spaceIds.length === 0) {
+      return { query: args.query, pages: [], rows: [], comments: [], files: [] };
+    }
+
+    // A failure in one category should not sink the whole sweep — the agent
+    // is better served by partial results plus a note than by an error.
+    const [pages, rows, comments, files] = await Promise.all([
+      this.sweepPages(args.query, args.spaceId, limit, user, workspace),
+      this.sweepBaseRows(args.query, spaceIds, limit, user, workspace),
+      this.sweepComments(args.query, spaceIds, limit, user, workspace),
+      this.sweepAttachments(args.query, args.spaceId, spaceIds, limit, user, workspace),
+    ]);
+
+    const failed = [
+      ['pages', pages],
+      ['rows', rows],
+      ['comments', comments],
+      ['files', files],
+    ]
+      .filter(([, r]: any) => r.error)
+      .map(([name, r]: any) => `${name}: ${r.error}`);
+
+    return {
+      query: args.query,
+      pages: pages.items,
+      rows: rows.items,
+      comments: comments.items,
+      files: files.items,
+      ...(failed.length > 0 && { partialFailures: failed }),
+    };
+  }
+
+  private async sweep<T>(
+    run: () => Promise<T[]>,
+  ): Promise<{ items: T[]; error?: string }> {
+    try {
+      return { items: await run() };
+    } catch (err: any) {
+      return { items: [], error: err?.message || 'unknown error' };
+    }
+  }
+
+  private sweepPages(
+    query: string,
+    spaceId: string | undefined,
+    limit: number,
+    user: User,
+    workspace: Workspace,
+  ) {
+    return this.sweep(async () => {
+      const { items } = await this.searchService.searchPage(
+        { query, spaceId, limit } as SearchDTO,
+        { userId: user.id, workspaceId: workspace.id },
+      );
+      return items.map((item: any) => ({
+        pageId: item.id,
+        slugId: item.slugId,
+        title: item.title,
+        spaceName: item.space?.name,
+        highlight: item.highlight,
+      }));
+    });
+  }
+
+  private sweepBaseRows(
+    query: string,
+    spaceIds: string[],
+    limit: number,
+    user: User,
+    workspace: Workspace,
+  ) {
+    return this.sweep(async () => {
+      // cells is jsonb keyed by property id; casting to text lets one ILIKE
+      // cover every column of every row without knowing the schema.
+      const rows = await this.db
+        .selectFrom('baseRows')
+        .innerJoin('pages', 'pages.id', 'baseRows.pageId')
+        .select([
+          'baseRows.id as rowId',
+          'baseRows.pageId',
+          'baseRows.cells',
+          'pages.title as baseName',
+          'pages.spaceId',
+        ])
+        .where('baseRows.workspaceId', '=', workspace.id)
+        .where('baseRows.deletedAt', 'is', null)
+        .where('pages.deletedAt', 'is', null)
+        .where('pages.spaceId', 'in', spaceIds)
+        .where(sql<boolean>`base_rows.cells::text ILIKE ${'%' + query + '%'}`)
+        .limit(limit * 3)
+        .execute();
+
+      if (rows.length === 0) return [];
+
+      const accessible = new Set(
+        await this.pagePermissionRepo.filterAccessiblePageIds({
+          pageIds: [...new Set(rows.map((r) => r.pageId))],
+          userId: user.id,
+        }),
+      );
+
+      return rows
+        .filter((r) => accessible.has(r.pageId))
+        .slice(0, limit)
+        .map((r) => {
+          const cells =
+            typeof r.cells === 'string' ? JSON.parse(r.cells) : r.cells || {};
+          return {
+            rowId: r.rowId,
+            basePageId: r.pageId,
+            baseName: r.baseName,
+            spaceId: r.spaceId,
+            // Only the cells that actually matched, so the agent is not handed
+            // the whole record just to find the hit.
+            matchedCells: Object.fromEntries(
+              Object.entries(cells).filter(([, v]) =>
+                String(v).toLowerCase().includes(query.toLowerCase()),
+              ),
+            ),
+          };
+        });
+    });
+  }
+
+  private sweepComments(
+    query: string,
+    spaceIds: string[],
+    limit: number,
+    user: User,
+    workspace: Workspace,
+  ) {
+    return this.sweep(async () => {
+      const comments = await this.db
+        .selectFrom('comments')
+        .innerJoin('pages', 'pages.id', 'comments.pageId')
+        .select([
+          'comments.id as commentId',
+          'comments.pageId',
+          'comments.content',
+          'comments.creatorId',
+          'comments.createdAt',
+          'pages.title as pageTitle',
+          'pages.slugId as pageSlugId',
+        ])
+        .where('comments.workspaceId', '=', workspace.id)
+        .where('comments.deletedAt', 'is', null)
+        .where('pages.deletedAt', 'is', null)
+        .where('pages.spaceId', 'in', spaceIds)
+        .where(sql<boolean>`comments.content::text ILIKE ${'%' + query + '%'}`)
+        .orderBy('comments.createdAt', 'desc')
+        .limit(limit * 3)
+        .execute();
+
+      if (comments.length === 0) return [];
+
+      const accessible = new Set(
+        await this.pagePermissionRepo.filterAccessiblePageIds({
+          pageIds: [...new Set(comments.map((c) => c.pageId))],
+          userId: user.id,
+        }),
+      );
+
+      return comments
+        .filter((c) => accessible.has(c.pageId))
+        .slice(0, limit)
+        .map((c) => ({
+          commentId: c.commentId,
+          pageId: c.pageId,
+          pageTitle: c.pageTitle,
+          pageSlugId: c.pageSlugId,
+          creatorId: c.creatorId,
+          createdAt: c.createdAt,
+          excerpt: jsonToText(c.content as any).slice(0, 300),
+        }));
+    });
+  }
+
+  private sweepAttachments(
+    query: string,
+    spaceId: string | undefined,
+    spaceIds: string[],
+    limit: number,
+    user: User,
+    workspace: Workspace,
+  ) {
+    return this.sweep(async () => {
+      const { items } = await this.searchAttachmentsService.search(
+        query,
+        workspace.id,
+        spaceId,
+      );
+
+      const allowedSpaces = new Set(spaceIds);
+      const inScope = items.filter((item: any) =>
+        allowedSpaces.has(item.spaceId),
+      );
+      if (inScope.length === 0) return [];
+
+      const accessible = new Set(
+        await this.pagePermissionRepo.filterAccessiblePageIds({
+          pageIds: [...new Set(inScope.map((i: any) => i.pageId))] as string[],
+          userId: user.id,
+        }),
+      );
+
+      return inScope
+        .filter((item: any) => accessible.has(item.pageId))
+        .slice(0, limit);
+    });
   }
 
   /**

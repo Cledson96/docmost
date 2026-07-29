@@ -11,6 +11,7 @@ import { FavoriteModule } from '../../core/favorite/favorite.module';
 import { TemplateModule } from '../template/template.module';
 import { SearchAttachmentsModule } from '../search-attachments/search-attachments.module';
 import { ExportModule } from '../../integrations/export/export.module';
+import { AttachmentModule } from '../../core/attachment/attachment.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ExportModule } from '../../integrations/export/export.module';
     TemplateModule,
     SearchAttachmentsModule,
     ExportModule,
+    AttachmentModule,
   ],
   controllers: [McpController],
   providers: [McpService],

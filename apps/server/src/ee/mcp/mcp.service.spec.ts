@@ -47,6 +47,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     templateService: { getTemplate: jest.fn(), useTemplate: jest.fn() },
     searchAttachmentsService: { search: jest.fn() },
     attachmentRepo: { findById: jest.fn() },
+    attachmentService: { uploadFile: jest.fn() },
     exportService: { exportPages: jest.fn() },
     wsService: { emitCommentEvent: jest.fn() },
     auditService: { log: jest.fn() },
@@ -75,6 +76,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       'templateService',
       'searchAttachmentsService',
       'attachmentRepo',
+      'attachmentService',
       'exportService',
       'wsService',
       'auditService',
@@ -406,6 +408,89 @@ describe('McpService permissions', () => {
     const body = JSON.parse(res.result.content[0].text);
     expect(body.items).toHaveLength(1);
     expect(body.items[0].id).toBe('a1');
+  });
+
+  it('search_everything returns every category empty when the user has no space', async () => {
+    const { service } = buildService();
+
+    const res: any = await callTool(service, 'search_everything', {
+      query: 'qualquer',
+    });
+
+    expect(JSON.parse(res.result.content[0].text)).toEqual({
+      query: 'qualquer',
+      pages: [],
+      rows: [],
+      comments: [],
+      files: [],
+    });
+  });
+
+  it('search_everything checks membership before sweeping a given space', async () => {
+    const { service, deps } = buildService();
+    deps.spaceAbility.createForUser.mockResolvedValue({ cannot: () => true });
+
+    const res: any = await callTool(service, 'search_everything', {
+      query: 'x',
+      spaceId: 'space-9',
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(deps.searchService.searchPage).not.toHaveBeenCalled();
+  });
+
+  it('upload_attachment requires edit access on the page', async () => {
+    const { service, deps } = buildService();
+    deps.pageAccessService.validateCanEdit.mockRejectedValue(
+      new ForbiddenException(),
+    );
+
+    const res: any = await callTool(service, 'upload_attachment', {
+      pageId: 'page-1',
+      fileName: 'a.png',
+      contentBase64: Buffer.from('hello').toString('base64'),
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(deps.attachmentService.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('upload_attachment rejects payloads over the base64 cap', async () => {
+    const { service, deps } = buildService();
+
+    const res: any = await callTool(service, 'upload_attachment', {
+      pageId: 'page-1',
+      fileName: 'big.bin',
+      contentBase64: 'A'.repeat(3 * 1024 * 1024),
+    });
+
+    expect(res.result.isError).toBe(true);
+    expect(res.result.content[0].text).toContain('too large');
+    expect(deps.attachmentService.uploadFile).not.toHaveBeenCalled();
+  });
+
+  it('upload_attachment strips a data: prefix and needs an extension', async () => {
+    const { service, deps } = buildService();
+    deps.attachmentService.uploadFile.mockResolvedValue({
+      id: 'att-1', fileName: 'a.png', fileSize: 5, mimeType: 'image/png',
+    });
+
+    const bad: any = await callTool(service, 'upload_attachment', {
+      pageId: 'page-1',
+      fileName: 'semextensao',
+      contentBase64: Buffer.from('hello').toString('base64'),
+    });
+    expect(bad.result.isError).toBe(true);
+    expect(bad.result.content[0].text).toContain('extension');
+
+    const good: any = await callTool(service, 'upload_attachment', {
+      pageId: 'page-1',
+      fileName: 'a.png',
+      contentBase64:
+        'data:image/png;base64,' + Buffer.from('hello').toString('base64'),
+    });
+    expect(good.result.isError).toBeUndefined();
+    expect(JSON.parse(good.result.content[0].text).attachmentId).toBe('att-1');
   });
 
   it('exposes the page and base tool surface', async () => {
