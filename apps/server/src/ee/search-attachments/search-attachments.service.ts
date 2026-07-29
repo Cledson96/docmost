@@ -23,7 +23,9 @@ export class SearchAttachmentsService {
         'attachments.createdAt',
         'attachments.updatedAt',
         sql<string>`ts_rank(attachments.tsv, plainto_tsquery('english', ${cleanQuery}))`.as('rank'),
-        sql<string>`ts_headline('english', coalesce(attachments.textContent, ''), plainto_tsquery('english', ${cleanQuery}), 'MaxWords=35, MinWords=15, StartSel=<mark>, StopSel=</mark>')`.as('highlight'),
+        // Raw sql bypasses the camelCase plugin, so the column must be
+        // written exactly as it exists in Postgres.
+        sql<string>`ts_headline('english', coalesce(attachments.text_content, ''), plainto_tsquery('english', ${cleanQuery}), 'MaxWords=35, MinWords=15, StartSel=<mark>, StopSel=</mark>')`.as('highlight'),
         'spaces.id as spaceId',
         'spaces.name as spaceName',
         'spaces.slug as spaceSlug',
