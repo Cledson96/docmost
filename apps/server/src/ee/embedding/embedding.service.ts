@@ -5,11 +5,19 @@ import { sql } from 'kysely';
 import { embed, embedMany } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { AiSettingsService } from '../ai/ai-settings.service';
 import { chunkText } from './chunk-text';
 
 /** Must match the dimension pinned by the page_embeddings migration. */
 export const EMBEDDING_DIMENSION = 1536;
 const DEFAULT_EMBEDDING_MODEL = 'text-embedding-3-small';
+
+/**
+ * Models whose output can be truncated to a shorter dimension without retraining
+ * (Matryoshka representation learning). For these we ask OpenAI for exactly the
+ * width of the column instead of rejecting the configuration.
+ */
+const MRL_MODEL_PATTERN = /^text-embedding-3-/;
 
 @Injectable()
 export class EmbeddingService {
@@ -18,15 +26,27 @@ export class EmbeddingService {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly environmentService: EnvironmentService,
+    private readonly aiSettingsService: AiSettingsService,
   ) {}
 
-  isConfigured(): boolean {
-    return Boolean(this.environmentService.getOpenAiApiKey());
+  /**
+   * Without a workspace this can only answer from the environment, which is what
+   * the queue processor needs before it knows whose pages it is indexing.
+   */
+  async isConfigured(workspaceId?: string): Promise<boolean> {
+    if (!workspaceId) {
+      return Boolean(this.environmentService.getOpenAiApiKey());
+    }
+    const config = await this.aiSettingsService.resolveEmbedding(workspaceId);
+    return Boolean(config.apiKey);
   }
 
-  private modelName(): string {
+  private async modelName(workspaceId: string): Promise<string> {
+    const config = await this.aiSettingsService.resolveEmbedding(workspaceId);
     return (
-      this.environmentService.getAiEmbeddingModel() || DEFAULT_EMBEDDING_MODEL
+      config.model ||
+      this.environmentService.getAiEmbeddingModel() ||
+      DEFAULT_EMBEDDING_MODEL
     );
   }
 
@@ -35,11 +55,12 @@ export class EmbeddingService {
    * match is a configuration error worth failing loudly on rather than
    * silently indexing nothing.
    */
-  private embeddingModel() {
-    const apiKey = this.environmentService.getOpenAiApiKey();
-    if (!apiKey) {
+  private async embeddingModel(workspaceId: string) {
+    const config = await this.aiSettingsService.resolveEmbedding(workspaceId);
+
+    if (!config.apiKey) {
       throw new BadRequestException(
-        'Semantic search needs OPENAI_API_KEY to be set.',
+        'Semantic search needs an embedding API key. Set one in Settings → AI, or set OPENAI_API_KEY.',
       );
     }
 
@@ -51,11 +72,21 @@ export class EmbeddingService {
     }
 
     const openai = createOpenAI({
-      apiKey,
-      baseURL: this.environmentService.getOpenAiApiUrl() || undefined,
+      apiKey: config.apiKey,
+      baseURL: config.baseUrl || undefined,
     });
 
-    return openai.textEmbeddingModel(this.modelName());
+    return openai.textEmbeddingModel(await this.modelName(workspaceId));
+  }
+
+  /**
+   * text-embedding-3-large returns 3072 values by default, which will not fit
+   * the column; asking for 1536 keeps the larger model usable as-is.
+   */
+  private async providerOptions(workspaceId: string) {
+    const model = await this.modelName(workspaceId);
+    if (!MRL_MODEL_PATTERN.test(model)) return undefined;
+    return { openai: { dimensions: EMBEDDING_DIMENSION } };
   }
 
   /** Rebuild the embeddings for one page. No-op for pages with no text. */
@@ -85,11 +116,12 @@ export class EmbeddingService {
     const inputs = chunks.map((chunk) => `${title}\n\n${chunk.text}`);
 
     const { embeddings } = await embedMany({
-      model: this.embeddingModel(),
+      model: await this.embeddingModel(page.workspaceId),
       values: inputs,
+      providerOptions: await this.providerOptions(page.workspaceId),
     });
 
-    const modelName = this.modelName();
+    const modelName = await this.modelName(page.workspaceId);
 
     // Delete-then-insert inside one transaction: a page must never be left
     // with a mix of old and new chunks if the insert fails halfway.
@@ -144,8 +176,9 @@ export class EmbeddingService {
     if (spaceIds.length === 0) return [];
 
     const { embedding } = await embed({
-      model: this.embeddingModel(),
+      model: await this.embeddingModel(workspaceId),
       value: query,
+      providerOptions: await this.providerOptions(workspaceId),
     });
 
     const vector = sql`${JSON.stringify(embedding)}::vector`;

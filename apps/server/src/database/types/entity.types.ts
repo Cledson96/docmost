@@ -42,6 +42,7 @@ import {
   Templates,
 } from './db';
 import { PageEmbeddings } from '@docmost/db/types/embeddings.types';
+import { WorkspaceAiSettings } from '@docmost/db/types/ai-settings.types';
 
 // AI Chat
 export type AiChat = Selectable<AiChats>;
@@ -188,6 +189,13 @@ export type UpdatableScimToken = Updateable<Omit<ScimTokens, 'id'>>;
 export type PageEmbedding = Selectable<PageEmbeddings>;
 export type InsertablePageEmbedding = Insertable<PageEmbeddings>;
 export type UpdatablePageEmbedding = Updateable<Omit<PageEmbeddings, 'id'>>;
+
+// Workspace AI settings
+export type WorkspaceAiSetting = Selectable<WorkspaceAiSettings>;
+export type InsertableWorkspaceAiSetting = Insertable<WorkspaceAiSettings>;
+export type UpdatableWorkspaceAiSetting = Updateable<
+  Omit<WorkspaceAiSettings, 'id'>
+>;
 
 // Notification
 export type Notification = Selectable<Notifications>;

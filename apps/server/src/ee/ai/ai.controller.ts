@@ -9,6 +9,8 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
+import { Workspace } from '@docmost/db/types/entity.types';
 import { AiService } from './ai.service';
 
 @UseGuards(JwtAuthGuard)
@@ -20,13 +22,15 @@ export class AiController {
   @Post('generate')
   async generate(
     @Body() body: { action?: string; content: string; prompt?: string },
+    @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.aiService.generate(body);
+    return this.aiService.generate({ ...body, workspaceId: workspace.id });
   }
 
   @Post('generate/stream')
   async generateStream(
     @Body() body: { action?: string; content: string; prompt?: string },
+    @AuthWorkspace() workspace: Workspace,
     @Res() res: Response,
   ) {
     const raw = (res as any).raw || res;
@@ -38,7 +42,10 @@ export class AiController {
     }
 
     try {
-      for await (const chunk of this.aiService.generateStream(body)) {
+      for await (const chunk of this.aiService.generateStream({
+        ...body,
+        workspaceId: workspace.id,
+      })) {
         raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
       raw.write('data: [DONE]\n\n');

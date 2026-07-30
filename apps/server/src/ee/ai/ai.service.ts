@@ -47,15 +47,16 @@ export class AiService {
     action?: string;
     content: string;
     prompt?: string;
+    workspaceId: string;
   }) {
-    if (!this.providerFactory.isConfigured()) {
+    if (!(await this.providerFactory.isConfigured(data.workspaceId))) {
       throw new BadRequestException('AI is not configured');
     }
 
     const systemPrompt = this.buildPrompt(data.action, data.prompt);
 
     const result = await generateText({
-      model: this.providerFactory.getCompletionModel(),
+      model: await this.providerFactory.getCompletionModel(data.workspaceId),
       system: systemPrompt,
       prompt: data.content,
     });
@@ -77,15 +78,16 @@ export class AiService {
     action?: string;
     content: string;
     prompt?: string;
+    workspaceId: string;
   }) {
-    if (!this.providerFactory.isConfigured()) {
+    if (!(await this.providerFactory.isConfigured(data.workspaceId))) {
       throw new BadRequestException('AI is not configured');
     }
 
     const systemPrompt = this.buildPrompt(data.action, data.prompt);
 
     const result = streamText({
-      model: this.providerFactory.getCompletionModel(),
+      model: await this.providerFactory.getCompletionModel(data.workspaceId),
       system: systemPrompt,
       prompt: data.content,
     });

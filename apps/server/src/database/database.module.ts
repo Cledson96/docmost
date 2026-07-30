@@ -4,6 +4,7 @@ import { EnvironmentService } from '../integrations/environment/environment.serv
 import { CamelCasePlugin, LogEvent, sql } from 'kysely';
 import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 import { WorkspaceRepo } from '@docmost/db/repos/workspace/workspace.repo';
+import { WorkspaceAiSettingsRepo } from '@docmost/db/repos/workspace/workspace-ai-settings.repo';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { GroupUserRepo } from '@docmost/db/repos/group/group-user.repo';
 import { SpaceRepo } from '@docmost/db/repos/space/space.repo';
@@ -72,6 +73,7 @@ import { normalizePostgresUrl } from '../common/helpers';
   providers: [
     MigrationService,
     WorkspaceRepo,
+    WorkspaceAiSettingsRepo,
     UserRepo,
     GroupRepo,
     GroupUserRepo,
@@ -98,6 +100,7 @@ import { normalizePostgresUrl } from '../common/helpers';
   ],
   exports: [
     WorkspaceRepo,
+    WorkspaceAiSettingsRepo,
     UserRepo,
     GroupRepo,
     GroupUserRepo,

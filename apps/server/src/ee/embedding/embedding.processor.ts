@@ -37,7 +37,7 @@ export class EmbeddingProcessor extends WorkerHost {
       case QueueJob.PAGE_UPDATED:
       case QueueJob.PAGE_CONTENT_UPDATED:
       case QueueJob.PAGE_RESTORED: {
-        if (!this.embeddingService.isConfigured()) {
+        if (!(await this.embeddingService.isConfigured(job.data?.workspaceId))) {
           // Draining rather than failing: with no key configured these jobs
           // would retry forever and refill the backlog this worker exists to
           // clear.

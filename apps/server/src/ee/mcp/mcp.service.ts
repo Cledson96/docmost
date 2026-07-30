@@ -2419,9 +2419,9 @@ export class McpService {
       }
 
       case 'reindex_embeddings': {
-        if (!this.embeddingService.isConfigured()) {
+        if (!(await this.embeddingService.isConfigured(workspace.id))) {
           throw new BadRequestException(
-            'Semantic search needs OPENAI_API_KEY to be set on the server.',
+            'Semantic search needs an embedding API key. Configure it in Settings → AI.',
           );
         }
 

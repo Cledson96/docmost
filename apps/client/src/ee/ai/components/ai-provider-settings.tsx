@@ -1,0 +1,449 @@
+import {
+  Alert,
+  Anchor,
+  Autocomplete,
+  Badge,
+  Button,
+  Divider,
+  Group,
+  Loader,
+  PasswordInput,
+  Select,
+  Stack,
+  Text,
+  TextInput,
+} from "@mantine/core";
+import { IconInfoCircle, IconRefresh } from "@tabler/icons-react";
+import { notifications } from "@mantine/notifications";
+import { useEffect, useMemo, useState } from "react";
+import { useTranslation } from "react-i18next";
+import {
+  useAiSettingsQuery,
+  useListAiModelsMutation,
+  useResetAiSettingsMutation,
+  useTestAiConnectionMutation,
+  useUpdateAiSettingsMutation,
+} from "@/ee/ai/queries/ai-settings-query.ts";
+import {
+  AiDriver,
+  UpdateAiSettingsDto,
+} from "@/ee/ai/types/ai-settings.types.ts";
+import { useHasFeature } from "@/ee/hooks/use-feature";
+import { Feature } from "@/ee/features";
+import { useUpgradeLabel } from "@/ee/hooks/use-upgrade-label";
+
+const DRIVER_OPTIONS: Array<{ value: AiDriver; label: string }> = [
+  { value: "", label: "Use server environment (default)" },
+  { value: "openai", label: "OpenAI" },
+  { value: "openrouter", label: "OpenRouter" },
+  { value: "gemini", label: "Google Gemini" },
+  { value: "ollama", label: "Ollama (self-hosted)" },
+  { value: "openai-compatible", label: "OpenAI-compatible endpoint" },
+];
+
+/** Providers where the base URL is derived and only worth showing as advanced. */
+const BASE_URL_REQUIRED: AiDriver[] = ["openai-compatible", "ollama"];
+const SUPPORTS_MODEL_LISTING: AiDriver[] = [
+  "openai",
+  "openrouter",
+  "openai-compatible",
+  "gemini",
+  "ollama",
+];
+
+interface FormState {
+  driver: AiDriver;
+  baseUrl: string;
+  apiKey: string;
+  chatModel: string;
+  completionModel: string;
+  embeddingBaseUrl: string;
+  embeddingApiKey: string;
+  embeddingModel: string;
+}
+
+const EMPTY_FORM: FormState = {
+  driver: "",
+  baseUrl: "",
+  apiKey: "",
+  chatModel: "",
+  completionModel: "",
+  embeddingBaseUrl: "",
+  embeddingApiKey: "",
+  embeddingModel: "",
+};
+
+export default function AiProviderSettings() {
+  const { t } = useTranslation();
+  const hasAccess = useHasFeature(Feature.AI);
+  const upgradeLabel = useUpgradeLabel();
+
+  const { data: settings, isLoading } = useAiSettingsQuery();
+  const updateMutation = useUpdateAiSettingsMutation();
+  const resetMutation = useResetAiSettingsMutation();
+  const chatModelsMutation = useListAiModelsMutation();
+  const embeddingModelsMutation = useListAiModelsMutation();
+  const testMutation = useTestAiConnectionMutation();
+
+  const [form, setForm] = useState<FormState>(EMPTY_FORM);
+  const [chatModels, setChatModels] = useState<string[]>([]);
+  const [embeddingModels, setEmbeddingModels] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!settings) return;
+    setForm({
+      driver: settings.driver,
+      baseUrl: settings.baseUrl ?? "",
+      apiKey: "",
+      chatModel: settings.chatModel ?? "",
+      completionModel: settings.completionModel ?? "",
+      embeddingBaseUrl: settings.embeddingBaseUrl ?? "",
+      embeddingApiKey: "",
+      embeddingModel: settings.embeddingModel ?? "",
+    });
+  }, [settings]);
+
+  const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
+
+  const needsBaseUrl = BASE_URL_REQUIRED.includes(form.driver);
+  const canListModels = SUPPORTS_MODEL_LISTING.includes(form.driver);
+
+  const apiKeyPlaceholder = useMemo(() => {
+    if (settings?.hasApiKey) {
+      return `${t("Stored")}: ${settings.apiKeyPreview}`;
+    }
+    return t("Paste the provider API key");
+  }, [settings, t]);
+
+  const embeddingKeyPlaceholder = useMemo(() => {
+    if (settings?.hasEmbeddingApiKey) {
+      return `${t("Stored")}: ${settings.embeddingApiKeyPreview}`;
+    }
+    return t("Paste an OpenAI API key used only for embeddings");
+  }, [settings, t]);
+
+  const handleLoadModels = async (kind: "chat" | "embedding") => {
+    const mutation = kind === "chat" ? chatModelsMutation : embeddingModelsMutation;
+    try {
+      const { models } = await mutation.mutateAsync({
+        driver: form.driver || undefined,
+        baseUrl:
+          (kind === "chat" ? form.baseUrl : form.embeddingBaseUrl) || undefined,
+        apiKey:
+          (kind === "chat" ? form.apiKey : form.embeddingApiKey) || undefined,
+        kind,
+      });
+      const ids = models.map((m) => m.id);
+      if (kind === "chat") setChatModels(ids);
+      else setEmbeddingModels(ids);
+
+      if (ids.length === 0) {
+        notifications.show({
+          message: t("The provider returned no models."),
+          color: "yellow",
+        });
+      }
+    } catch (err: any) {
+      notifications.show({
+        message: err?.response?.data?.message ?? err?.message,
+        color: "red",
+      });
+    }
+  };
+
+  const handleSave = async () => {
+    // Secrets are only sent when the admin actually typed one, so saving the
+    // form does not wipe a key that is already stored.
+    const payload: UpdateAiSettingsDto = {
+      driver: form.driver,
+      baseUrl: form.baseUrl,
+      chatModel: form.chatModel,
+      completionModel: form.completionModel,
+      embeddingBaseUrl: form.embeddingBaseUrl,
+      embeddingModel: form.embeddingModel,
+    };
+    if (form.apiKey) payload.apiKey = form.apiKey;
+    if (form.embeddingApiKey) payload.embeddingApiKey = form.embeddingApiKey;
+
+    try {
+      const result = await updateMutation.mutateAsync(payload);
+      setForm((prev) => ({ ...prev, apiKey: "", embeddingApiKey: "" }));
+      notifications.show({
+        message: result.reindexQueued
+          ? t("Saved. Re-indexing the workspace with the new embedding model.")
+          : t("AI provider settings saved."),
+      });
+    } catch (err: any) {
+      notifications.show({
+        message: err?.response?.data?.message ?? err?.message,
+        color: "red",
+      });
+    }
+  };
+
+  const handleTest = async () => {
+    try {
+      const result = await testMutation.mutateAsync();
+      notifications.show({
+        message: result.message,
+        color: result.ok ? "green" : "red",
+        autoClose: result.ok ? 4000 : 8000,
+      });
+    } catch (err: any) {
+      notifications.show({
+        message: err?.response?.data?.message ?? err?.message,
+        color: "red",
+      });
+    }
+  };
+
+  const handleReset = async () => {
+    try {
+      await resetMutation.mutateAsync();
+      setChatModels([]);
+      setEmbeddingModels([]);
+      notifications.show({
+        message: t("Cleared. AI now follows the server environment again."),
+      });
+    } catch (err: any) {
+      notifications.show({
+        message: err?.response?.data?.message ?? err?.message,
+        color: "red",
+      });
+    }
+  };
+
+  if (isLoading) {
+    return <Loader size="sm" />;
+  }
+
+  return (
+    <Stack gap="lg">
+      {!hasAccess && (
+        <Alert icon={<IconInfoCircle />} title={upgradeLabel} color="blue">
+          {t("AI is only available in the enterprise edition.")}
+        </Alert>
+      )}
+
+      {settings?.managedByEnv && (
+        <Alert icon={<IconInfoCircle />} color="gray">
+          {t(
+            "AI is currently configured through server environment variables. Picking a provider here overrides them for this workspace.",
+          )}
+        </Alert>
+      )}
+
+      <Group justify="space-between" align="center">
+        <Text size="md" fw={500}>
+          {t("Provider")}
+        </Text>
+        {settings?.configured ? (
+          <Badge color="green" variant="light">
+            {t("Configured")}
+          </Badge>
+        ) : (
+          <Badge color="gray" variant="light">
+            {t("Not configured")}
+          </Badge>
+        )}
+      </Group>
+
+      <Select
+        label={t("AI provider")}
+        description={t("Which service answers and edits documents.")}
+        data={DRIVER_OPTIONS.map((o) => ({
+          value: o.value,
+          label: t(o.label),
+        }))}
+        value={form.driver}
+        onChange={(value) => set("driver", (value ?? "") as AiDriver)}
+        disabled={!hasAccess}
+        allowDeselect={false}
+      />
+
+      {form.driver === "openrouter" && (
+        <Text size="sm" c="dimmed">
+          <Anchor
+            href="https://openrouter.ai/keys"
+            target="_blank"
+            size="sm"
+            rel="noreferrer"
+          >
+            {t("Create an OpenRouter key")}
+          </Anchor>{" "}
+          {t(
+            "then pick any model it offers, e.g. anthropic/claude-sonnet-4.5. OpenRouter has no embeddings API, so configure embeddings separately below.",
+          )}
+        </Text>
+      )}
+
+      {form.driver !== "" && (
+        <>
+          <TextInput
+            label={t("Base URL")}
+            description={
+              needsBaseUrl
+                ? t("Required for this provider.")
+                : t("Optional. Leave empty to use the provider default.")
+            }
+            placeholder={
+              form.driver === "openrouter"
+                ? "https://openrouter.ai/api/v1"
+                : form.driver === "ollama"
+                  ? "http://localhost:11434"
+                  : "https://api.openai.com/v1"
+            }
+            value={form.baseUrl}
+            onChange={(e) => set("baseUrl", e.currentTarget.value)}
+            disabled={!hasAccess}
+          />
+
+          {form.driver !== "ollama" && (
+            <PasswordInput
+              label={t("API key")}
+              description={t(
+                "Stored encrypted. Leave empty to keep the current key.",
+              )}
+              placeholder={apiKeyPlaceholder}
+              value={form.apiKey}
+              onChange={(e) => set("apiKey", e.currentTarget.value)}
+              disabled={!hasAccess}
+            />
+          )}
+
+          <Group align="flex-end" grow>
+            <Autocomplete
+              label={t("Chat model")}
+              description={t("Used by Ask AI and the chat sidebar.")}
+              data={chatModels}
+              value={form.chatModel}
+              onChange={(value) => set("chatModel", value)}
+              placeholder={t("e.g. gpt-4o-mini")}
+              disabled={!hasAccess}
+            />
+            <Autocomplete
+              label={t("Completion model")}
+              description={t("Used by the editor AI actions.")}
+              data={chatModels}
+              value={form.completionModel}
+              onChange={(value) => set("completionModel", value)}
+              placeholder={t("e.g. gpt-4o-mini")}
+              disabled={!hasAccess}
+            />
+          </Group>
+
+          {canListModels && (
+            <Group>
+              <Button
+                variant="default"
+                size="xs"
+                leftSection={<IconRefresh size={14} />}
+                loading={chatModelsMutation.isPending}
+                onClick={() => handleLoadModels("chat")}
+                disabled={!hasAccess}
+              >
+                {t("Fetch models from provider")}
+              </Button>
+              {chatModels.length > 0 && (
+                <Text size="xs" c="dimmed">
+                  {chatModels.length} {t("models available")}
+                </Text>
+              )}
+            </Group>
+          )}
+        </>
+      )}
+
+      <Divider
+        my="xs"
+        label={t("Embeddings (semantic search)")}
+        labelPosition="left"
+      />
+
+      <Text size="sm" c="dimmed">
+        {t(
+          "Embeddings always use an OpenAI-compatible endpoint and are configured separately from chat, so a chat gateway without an embeddings API does not break search. Changing the model re-indexes the workspace.",
+        )}
+      </Text>
+
+      <PasswordInput
+        label={t("Embedding API key")}
+        description={t(
+          "Optional. Falls back to the chat key when the provider is OpenAI.",
+        )}
+        placeholder={embeddingKeyPlaceholder}
+        value={form.embeddingApiKey}
+        onChange={(e) => set("embeddingApiKey", e.currentTarget.value)}
+        disabled={!hasAccess}
+      />
+
+      <TextInput
+        label={t("Embedding base URL")}
+        description={t("Optional. Defaults to the OpenAI API.")}
+        placeholder="https://api.openai.com/v1"
+        value={form.embeddingBaseUrl}
+        onChange={(e) => set("embeddingBaseUrl", e.currentTarget.value)}
+        disabled={!hasAccess}
+      />
+
+      <Autocomplete
+        label={t("Embedding model")}
+        description={t(
+          "text-embedding-3-small and text-embedding-3-large are both supported; output is truncated to the 1536 dimensions the index uses.",
+        )}
+        data={
+          embeddingModels.length > 0
+            ? embeddingModels
+            : ["text-embedding-3-small", "text-embedding-3-large"]
+        }
+        value={form.embeddingModel}
+        onChange={(value) => set("embeddingModel", value)}
+        placeholder="text-embedding-3-small"
+        disabled={!hasAccess}
+      />
+
+      <Group>
+        <Button
+          variant="default"
+          size="xs"
+          leftSection={<IconRefresh size={14} />}
+          loading={embeddingModelsMutation.isPending}
+          onClick={() => handleLoadModels("embedding")}
+          disabled={!hasAccess}
+        >
+          {t("Fetch embedding models")}
+        </Button>
+      </Group>
+
+      <Group justify="space-between" mt="md">
+        <Group>
+          <Button
+            onClick={handleSave}
+            loading={updateMutation.isPending}
+            disabled={!hasAccess}
+          >
+            {t("Save")}
+          </Button>
+          <Button
+            variant="default"
+            onClick={handleTest}
+            loading={testMutation.isPending}
+            disabled={!hasAccess}
+          >
+            {t("Test connection")}
+          </Button>
+        </Group>
+        <Button
+          variant="subtle"
+          color="red"
+          onClick={handleReset}
+          loading={resetMutation.isPending}
+          disabled={!hasAccess}
+        >
+          {t("Clear and use environment")}
+        </Button>
+      </Group>
+    </Stack>
+  );
+}

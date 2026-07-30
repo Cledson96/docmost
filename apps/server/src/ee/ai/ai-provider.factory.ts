@@ -1,84 +1,70 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
-import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { createOpenAI } from '@ai-sdk/openai';
 import { createGoogleGenerativeAI } from '@ai-sdk/google';
 import { createOllama } from 'ai-sdk-ollama';
 import { LanguageModel } from 'ai';
+import {
+  AiSettingsService,
+  ResolvedAiConfig,
+} from './ai-settings.service';
 
 @Injectable()
 export class AiProviderFactory {
-  constructor(private readonly envService: EnvironmentService) {}
+  constructor(private readonly aiSettingsService: AiSettingsService) {}
 
-  isConfigured(): boolean {
-    const driver = this.envService.getAiDriver();
-    if (!driver) return false;
-    if (driver === 'openai' || driver === 'openai-compatible') {
-      return !!this.envService.getOpenAiApiKey();
-    }
-    if (driver === 'gemini') {
-      return !!this.envService.getGeminiApiKey();
-    }
-    if (driver === 'ollama') {
-      return !!this.envService.getOllamaApiUrl();
-    }
-    return false;
+  async isConfigured(workspaceId: string): Promise<boolean> {
+    return this.aiSettingsService.isConfigured(workspaceId);
   }
 
-  getCompletionModel(): LanguageModel {
-    return this.createModel(this.envService.getAiCompletionModel());
+  async getCompletionModel(workspaceId: string): Promise<LanguageModel> {
+    const config = await this.aiSettingsService.resolve(workspaceId);
+    return this.createModel(config, config.completionModel);
   }
 
-  getChatModel(): LanguageModel {
-    return this.createModel(this.envService.getAiChatModel());
+  async getChatModel(workspaceId: string): Promise<LanguageModel> {
+    const config = await this.aiSettingsService.resolve(workspaceId);
+    return this.createModel(config, config.chatModel);
   }
 
-  private createModel(modelId?: string) {
-    const driver = this.envService.getAiDriver();
-
-    if (!driver) {
+  /** Used by the settings screen to exercise a config before relying on it. */
+  createModel(config: ResolvedAiConfig, modelId?: string): LanguageModel {
+    if (!config.driver) {
       throw new BadRequestException(
-        'AI is not configured. Please set AI_DRIVER in your environment.',
+        'AI is not configured. Set it up in Settings → AI, or set AI_DRIVER in your environment.',
       );
     }
 
-    const defaultModel =
-      driver === 'gemini'
-        ? 'gemini-1.5-flash'
-        : driver === 'ollama'
-          ? 'llama3.2'
-          : 'gpt-4o-mini';
+    const effectiveModel =
+      modelId ||
+      config.completionModel ||
+      this.aiSettingsService.defaultModelFor(config.driver);
 
-    const effectiveModel = modelId || defaultModel;
-
-    switch (driver) {
-      case 'openai': {
-        const openai = createOpenAI({
-          apiKey: this.envService.getOpenAiApiKey(),
-          baseURL: this.envService.getOpenAiApiUrl() || undefined,
-        });
-        return openai.chat(effectiveModel);
-      }
+    switch (config.driver) {
+      // OpenRouter and any other OpenAI-compatible gateway differ from OpenAI
+      // only by base URL, which resolve() has already filled in.
+      case 'openai':
+      case 'openrouter':
       case 'openai-compatible': {
         const openai = createOpenAI({
-          apiKey: this.envService.getOpenAiApiKey(),
-          baseURL: this.envService.getOpenAiApiUrl(),
+          apiKey: config.apiKey,
+          baseURL: config.baseUrl || undefined,
         });
         return openai.chat(effectiveModel);
       }
       case 'gemini': {
         const google = createGoogleGenerativeAI({
-          apiKey: this.envService.getGeminiApiKey(),
+          apiKey: config.apiKey,
         });
         return google(effectiveModel);
       }
       case 'ollama': {
         const ollama = createOllama({
-          baseURL: this.envService.getOllamaApiUrl(),
+          baseURL: config.baseUrl,
         });
         return ollama(effectiveModel);
       }
       default:
-        throw new BadRequestException(`Unknown AI driver: ${driver}`);
+        throw new BadRequestException(`Unknown AI driver: ${config.driver}`);
     }
   }
 }

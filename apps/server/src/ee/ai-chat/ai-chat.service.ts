@@ -222,7 +222,7 @@ export class AiChatService {
     user: User,
     workspaceId: string,
   ) {
-    if (!this.providerFactory.isConfigured()) {
+    if (!(await this.providerFactory.isConfigured(workspaceId))) {
       throw new BadRequestException('AI is not configured');
     }
 
@@ -315,7 +315,7 @@ export class AiChatService {
     // Stream the AI response (without SDK tools due to Zod v4 incompatibility)
     // Instead, editing is handled via command parsing from the AI response text
     const result = streamText({
-      model: this.providerFactory.getChatModel(),
+      model: await this.providerFactory.getChatModel(workspaceId),
       system: systemPrompt,
       messages,
     });
@@ -347,9 +347,12 @@ export class AiChatService {
 
     // Auto-generate title if it's the first exchange
     if (!chat.title && history.length <= 1) {
-      this.autoGenerateTitle(chatId, params.content, fullResponse).catch(
-        () => {},
-      );
+      this.autoGenerateTitle(
+        chatId,
+        params.content,
+        fullResponse,
+        workspaceId,
+      ).catch(() => {});
     }
 
     // Update chat timestamp
@@ -488,12 +491,13 @@ export class AiChatService {
     chatId: string,
     userMessage: string,
     assistantResponse: string,
+    workspaceId: string,
   ) {
     try {
-      if (!this.providerFactory.isConfigured()) return;
+      if (!(await this.providerFactory.isConfigured(workspaceId))) return;
 
       const result = await generateText({
-        model: this.providerFactory.getCompletionModel(),
+        model: await this.providerFactory.getCompletionModel(workspaceId),
         system:
           'Generate a very short title (max 6 words) for this conversation. ' +
           'Return only the title text, nothing else. No quotes or punctuation at the end.',

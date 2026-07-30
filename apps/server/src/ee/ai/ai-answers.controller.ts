@@ -40,7 +40,7 @@ export class AiAnswersController {
     }
 
     try {
-      if (!this.providerFactory.isConfigured()) {
+      if (!(await this.providerFactory.isConfigured(workspace.id))) {
         raw.write(
           `data: ${JSON.stringify({ error: 'AI is not configured' })}\n\n`,
         );
@@ -107,7 +107,7 @@ export class AiAnswersController {
 
       // Stream AI response
       const result = streamText({
-        model: this.providerFactory.getChatModel(),
+        model: await this.providerFactory.getChatModel(workspace.id),
         system:
           'You are a helpful assistant that answers questions based on the provided document context. ' +
           'Use the document content to provide accurate answers. If the documents do not contain ' +

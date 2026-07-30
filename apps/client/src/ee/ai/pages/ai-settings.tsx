@@ -8,6 +8,7 @@ import EnableAiSearch from "@/ee/ai/components/enable-ai-search.tsx";
 import EnableGenerativeAi from "@/ee/ai/components/enable-generative-ai.tsx";
 import EnableAiChat from "@/ee/ai-chat/components/enable-ai-chat.tsx";
 import McpSettings from "@/ee/ai/components/mcp-settings.tsx";
+import AiProviderSettings from "@/ee/ai/components/ai-provider-settings.tsx";
 import { Alert, Stack, Tabs } from "@mantine/core";
 import { IconInfoCircle } from "@tabler/icons-react";
 import { useHasFeature } from "@/ee/hooks/use-feature";
@@ -24,7 +25,11 @@ export default function AiSettings() {
   const location = useLocation();
   const navigate = useNavigate();
 
-  const activeTab = location.pathname.endsWith("/mcp") ? "mcp" : "ai";
+  const activeTab = location.pathname.endsWith("/mcp")
+    ? "mcp"
+    : location.pathname.endsWith("/provider")
+      ? "provider"
+      : "ai";
 
   if (!isAdmin) {
     return null;
@@ -33,6 +38,8 @@ export default function AiSettings() {
   const handleTabChange = (value: string | null) => {
     if (value === "mcp") {
       navigate("/settings/ai/mcp");
+    } else if (value === "provider") {
+      navigate("/settings/ai/provider");
     } else {
       navigate("/settings/ai");
     }
@@ -49,6 +56,9 @@ export default function AiSettings() {
         <Tabs.List>
           <Tabs.Tab fw={500} value="ai">
             {t("AI")}
+          </Tabs.Tab>
+          <Tabs.Tab fw={500} value="provider">
+            {t("Provider")}
           </Tabs.Tab>
           <Tabs.Tab fw={500} value="mcp">
             {t("MCP")}
@@ -74,6 +84,10 @@ export default function AiSettings() {
             <EnableGenerativeAi />
             <EnableAiChat />
           </Stack>
+        </Tabs.Panel>
+
+        <Tabs.Panel value="provider" pt="md">
+          <AiProviderSettings />
         </Tabs.Panel>
 
         <Tabs.Panel value="mcp" pt="md">
