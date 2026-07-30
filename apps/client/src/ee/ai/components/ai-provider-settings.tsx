@@ -51,6 +51,32 @@ const SUPPORTS_MODEL_LISTING: AiDriver[] = [
   "ollama",
 ];
 
+/**
+ * A plain text field named like a URL is exactly what browsers and password
+ * managers autofill with an email or username. That value then becomes the API
+ * host, so the fields opt out of autofill and the URL is validated inline.
+ */
+const NO_AUTOFILL = {
+  autoComplete: "off",
+  autoCorrect: "off",
+  spellCheck: false,
+  "data-form-type": "other",
+  "data-lpignore": "true",
+} as const;
+
+function baseUrlError(value: string): string | null {
+  if (!value.trim()) return null;
+  try {
+    const parsed = new URL(value.trim());
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+      return "Must start with http:// or https://";
+    }
+    return null;
+  } catch {
+    return "Must be a full URL, e.g. https://openrouter.ai/api/v1";
+  }
+}
+
 interface FormState {
   driver: AiDriver;
   baseUrl: string;
@@ -106,6 +132,9 @@ export default function AiProviderSettings() {
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  const hasUrlError = Boolean(
+    baseUrlError(form.baseUrl) || baseUrlError(form.embeddingBaseUrl),
+  );
   const needsBaseUrl = BASE_URL_REQUIRED.includes(form.driver);
   const canListModels = SUPPORTS_MODEL_LISTING.includes(form.driver);
 
@@ -297,6 +326,8 @@ export default function AiProviderSettings() {
             value={form.baseUrl}
             onChange={(e) => set("baseUrl", e.currentTarget.value)}
             disabled={!hasAccess}
+            error={baseUrlError(form.baseUrl)}
+            {...NO_AUTOFILL}
           />
 
           {form.driver !== "ollama" && (
@@ -309,6 +340,8 @@ export default function AiProviderSettings() {
               value={form.apiKey}
               onChange={(e) => set("apiKey", e.currentTarget.value)}
               disabled={!hasAccess}
+              {...NO_AUTOFILL}
+              autoComplete="new-password"
             />
           )}
 
@@ -376,6 +409,8 @@ export default function AiProviderSettings() {
         value={form.embeddingApiKey}
         onChange={(e) => set("embeddingApiKey", e.currentTarget.value)}
         disabled={!hasAccess}
+        {...NO_AUTOFILL}
+        autoComplete="new-password"
       />
 
       <TextInput
@@ -385,6 +420,8 @@ export default function AiProviderSettings() {
         value={form.embeddingBaseUrl}
         onChange={(e) => set("embeddingBaseUrl", e.currentTarget.value)}
         disabled={!hasAccess}
+        error={baseUrlError(form.embeddingBaseUrl)}
+        {...NO_AUTOFILL}
       />
 
       <Autocomplete
@@ -421,7 +458,7 @@ export default function AiProviderSettings() {
           <Button
             onClick={handleSave}
             loading={updateMutation.isPending}
-            disabled={!hasAccess}
+            disabled={!hasAccess || hasUrlError}
           >
             {t("Save")}
           </Button>

@@ -95,23 +95,30 @@ export class AiSettingsService {
       };
     }
 
+    // Once a workspace picks its own provider, env values stop applying: model
+    // names are provider-specific (OpenRouter wants `openai/gpt-4o-mini`, not
+    // `gpt-4o-mini`), so inheriting AI_CHAT_MODEL from a different provider
+    // yields a model id the new one rejects.
+    const ownsConfig = Boolean(row?.driver);
+
     const apiKey =
       storedKey ??
-      (driver === 'gemini'
-        ? this.environmentService.getGeminiApiKey()
-        : this.environmentService.getOpenAiApiKey()) ??
-      null;
+      (ownsConfig
+        ? null
+        : ((driver === 'gemini'
+            ? this.environmentService.getGeminiApiKey()
+            : this.environmentService.getOpenAiApiKey()) ?? null));
 
     const baseUrl = this.effectiveBaseUrl(driver, row?.baseUrl);
 
     const completionModel =
       row?.completionModel ||
-      this.environmentService.getAiCompletionModel() ||
+      (ownsConfig ? null : this.environmentService.getAiCompletionModel()) ||
       DEFAULT_MODELS[driver];
 
     const chatModel =
       row?.chatModel ||
-      this.environmentService.getAiChatModel() ||
+      (ownsConfig ? null : this.environmentService.getAiChatModel()) ||
       completionModel;
 
     return {
@@ -144,11 +151,11 @@ export class AiSettingsService {
         ? decryptSecret(row.apiKeyEncrypted, appSecret)
         : null;
 
+    const candidateBaseUrl =
+      row?.embeddingBaseUrl || this.environmentService.getOpenAiApiUrl() || null;
+
     return {
-      baseUrl:
-        row?.embeddingBaseUrl ||
-        this.environmentService.getOpenAiApiUrl() ||
-        null,
+      baseUrl: candidateBaseUrl ? this.validBaseUrl(candidateBaseUrl) : null,
       apiKey:
         storedKey ??
         chatFallbackKey ??
@@ -398,7 +405,16 @@ export class AiSettingsService {
     ...candidates: Array<string | null | undefined>
   ): string | null {
     const explicit = candidates.find((c) => c && c.trim().length > 0);
-    if (explicit) return explicit.trim();
+    if (explicit) {
+      const valid = this.validBaseUrl(explicit);
+      // A stored value that is not a URL at all (a browser autofilling the
+      // field with an email, say) must not become the request host: fall
+      // through to the provider default instead.
+      if (valid) return valid;
+      this.logger.warn(
+        `Ignoring invalid AI base URL for driver ${driver || 'unset'}`,
+      );
+    }
 
     if (driver === 'openrouter') return OPENROUTER_BASE_URL;
     if (driver === 'ollama') {
@@ -412,6 +428,20 @@ export class AiSettingsService {
 
   defaultModelFor(driver: AiDriver): string {
     return DEFAULT_MODELS[driver];
+  }
+
+  /** Returns the trimmed URL when it parses as http(s), otherwise null. */
+  private validBaseUrl(candidate: string): string | null {
+    const trimmed = candidate.trim();
+    try {
+      const parsed = new URL(trimmed);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+        return null;
+      }
+      return trimmed;
+    } catch {
+      return null;
+    }
   }
 
   private trimSlash(url: string | null): string {
