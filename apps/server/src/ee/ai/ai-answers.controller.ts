@@ -14,6 +14,8 @@ import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { streamText } from 'ai';
 import { AiProviderFactory } from './ai-provider.factory';
+import { languageFromLocale } from './ai-language.util';
+import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { sql } from 'kysely';
 
 @UseGuards(JwtAuthGuard)
@@ -22,6 +24,7 @@ export class AiAnswersController {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly providerFactory: AiProviderFactory,
+    private readonly environmentService: EnvironmentService,
   ) {}
 
   @Post('answers')
@@ -49,12 +52,31 @@ export class AiAnswersController {
         return;
       }
 
-      // Search for relevant pages using text search
+      // Search for relevant pages using text search. Punctuation is stripped
+      // because to_tsquery throws a syntax error on characters it reads as
+      // operators — `runbook: banco (produção)`, `deploy!` and `custo <> valor`
+      // all failed before this.
+      //
+      // The query mirrors how the pages trigger builds tsv — english dictionary
+      // over f_unaccent, the same shape SearchService uses. Without f_unaccent
+      // every accented word silently matched nothing, since the index stores
+      // `producao` while the query asked for `produção`.
       const searchTerms = body.query
+        .replace(/[^\p{L}\p{N}\s]/gu, ' ')
         .trim()
         .split(/\s+/)
+        .filter((word) => word.length > 0)
         .map((word) => `${word}:*`)
-        .join(' & ');
+        .join(' | ');
+
+      if (!searchTerms) {
+        raw.write(
+          `data: ${JSON.stringify({ error: 'Empty query' })}\n\n`,
+        );
+        raw.write('data: [DONE]\n\n');
+        raw.end();
+        return;
+      }
 
       let searchQuery = this.db
         .selectFrom('pages')
@@ -62,7 +84,7 @@ export class AiAnswersController {
         .where('workspaceId', '=', workspace.id)
         .where('deletedAt', 'is', null)
         .where(
-          sql<boolean>`tsv @@ to_tsquery('english', ${searchTerms})`,
+          sql<boolean>`tsv @@ to_tsquery('english', f_unaccent(${searchTerms}))`,
         )
         .limit(5);
 
@@ -109,9 +131,12 @@ export class AiAnswersController {
       const result = streamText({
         model: await this.providerFactory.getChatModel(workspace.id),
         system:
-          'You are a helpful assistant that answers questions based on the provided document context. ' +
-          'Use the document content to provide accurate answers. If the documents do not contain ' +
-          'relevant information, say so honestly. Format your response using Markdown.',
+          `You answer questions about ${this.environmentService.getAppName()}, the company knowledge wiki, ` +
+          'using only the document context provided below. ' +
+          'If the documents do not contain relevant information, say so honestly instead of answering from ' +
+          'general knowledge. Format your response using Markdown. ' +
+          `Write your answer in ${languageFromLocale(user.locale)}, unless the question is asked in another ` +
+          'language — then answer in the language of the question.',
         prompt: `Context documents:\n\n${context}\n\nQuestion: ${body.query}`,
       });
 

@@ -1,6 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { generateText, streamText } from 'ai';
 import { AiProviderFactory } from './ai-provider.factory';
+import { DEFAULT_AI_LANGUAGE, languageFromLocale } from './ai-language.util';
 
 export enum AiAction {
   IMPROVE_WRITING = 'improve_writing',
@@ -36,7 +37,7 @@ const ACTION_PROMPTS: Record<string, string> = {
   [AiAction.CONTINUE_WRITING]:
     'Continue writing the following text naturally, maintaining the same style, tone, and context. Return only the continuation without repeating the original text.',
   [AiAction.TRANSLATE]:
-    'Translate the following text to English. If it is already in English, translate it to Portuguese. Return only the translation without explanations.',
+    'Translate the following text to {{language}}. If it is already in {{language}}, translate it to English. Return only the translation without explanations.',
 };
 
 @Injectable()
@@ -48,12 +49,17 @@ export class AiService {
     content: string;
     prompt?: string;
     workspaceId: string;
+    locale?: string | null;
   }) {
     if (!(await this.providerFactory.isConfigured(data.workspaceId))) {
       throw new BadRequestException('AI is not configured');
     }
 
-    const systemPrompt = this.buildPrompt(data.action, data.prompt);
+    const systemPrompt = this.buildPrompt(
+      data.action,
+      data.prompt,
+      languageFromLocale(data.locale),
+    );
 
     const result = await generateText({
       model: await this.providerFactory.getCompletionModel(data.workspaceId),
@@ -79,12 +85,17 @@ export class AiService {
     content: string;
     prompt?: string;
     workspaceId: string;
+    locale?: string | null;
   }) {
     if (!(await this.providerFactory.isConfigured(data.workspaceId))) {
       throw new BadRequestException('AI is not configured');
     }
 
-    const systemPrompt = this.buildPrompt(data.action, data.prompt);
+    const systemPrompt = this.buildPrompt(
+      data.action,
+      data.prompt,
+      languageFromLocale(data.locale),
+    );
 
     const result = streamText({
       model: await this.providerFactory.getCompletionModel(data.workspaceId),
@@ -97,19 +108,32 @@ export class AiService {
     }
   }
 
-  private buildPrompt(action?: string, customPrompt?: string): string {
+  private buildPrompt(
+    action?: string,
+    customPrompt?: string,
+    language: string = DEFAULT_AI_LANGUAGE,
+  ): string {
+    // Every action rewrites the user's own text, so the output has to stay in
+    // their language rather than drifting to the prompt's.
+    const languageRule = `Write your output in ${language}, unless the text you are given is in another language — then keep that language. `;
+
     if (action === AiAction.CUSTOM && customPrompt) {
-      return customPrompt;
+      return `${languageRule}${customPrompt}`;
     }
 
     if (action && ACTION_PROMPTS[action]) {
-      const base = ACTION_PROMPTS[action];
+      const base = ACTION_PROMPTS[action].replace(/\{\{language\}\}/g, language);
+      const prefix = action === AiAction.TRANSLATE ? '' : languageRule;
+
       if (customPrompt) {
-        return `${base}\n\nAdditional instructions: ${customPrompt}`;
+        return `${prefix}${base}\n\nAdditional instructions: ${customPrompt}`;
       }
-      return base;
+      return `${prefix}${base}`;
     }
 
-    return customPrompt || 'You are a helpful writing assistant. Help the user with their request.';
+    return (
+      customPrompt ||
+      `${languageRule}You are a helpful writing assistant. Help the user with their request.`
+    );
   }
 }

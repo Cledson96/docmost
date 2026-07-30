@@ -9,6 +9,7 @@ export const TOOL_LABELS: Record<string, string> = {
   get_page: "Read page",
   create_page: "Created page",
   update_page: "Updated page",
+  update_page_title: "Renamed page",
 };
 
 type Props = {

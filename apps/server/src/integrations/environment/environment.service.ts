@@ -45,6 +45,11 @@ export class EnvironmentService {
     return this.configService.get<string>('APP_SECRET');
   }
 
+  /** Product name used where the app introduces itself, e.g. AI prompts. */
+  getAppName(): string {
+    return this.configService.get<string>('APP_NAME', 'Gobrax Wiki');
+  }
+
   getDatabaseURL(): string {
     return this.configService.get<string>('DATABASE_URL');
   }

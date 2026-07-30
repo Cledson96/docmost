@@ -14,6 +14,7 @@ import { markdownToHtml } from "@docmost/editor-ext";
 import { CopyButton } from "@/components/common/copy-button";
 import type { AiChatMessage, AiChatToolCall } from "../types/ai-chat.types";
 import ChatToolGroup from "./chat-tool-group";
+import { stripEditCommands } from "../utils/strip-edit-commands";
 import classes from "../styles/chat-message.module.css";
 import CopyTextButton from "@/components/common/copy.tsx";
 
@@ -118,9 +119,14 @@ export default function ChatMessage({
     );
   }
 
+  // The edit commands the model emits are machine instructions the server acts
+  // on — showing the raw ::: blocks and their JSON payload in the transcript is
+  // noise. What was actually applied shows up as a tool step instead.
+  const assistantContent = stripEditCommands(content);
+
   // Only label the article when there's something meaningful to announce.
   // Tool-only assistant turns (no text) shouldn't announce "Assistant said:" with empty content.
-  const hasAnnouncableContent = Boolean(content);
+  const hasAnnouncableContent = Boolean(assistantContent);
 
   return (
     <div
@@ -132,12 +138,12 @@ export default function ChatMessage({
         {toolCalls && toolCalls.length > 0 && (
           <ChatToolGroup toolCalls={toolCalls} isStreaming={isStreaming} />
         )}
-        {content && (
+        {assistantContent && (
           <div
             onClick={handleContentClick}
             dangerouslySetInnerHTML={{
               __html: chatSanitizer.sanitize(
-                markdownToHtml(content) as string,
+                markdownToHtml(assistantContent) as string,
                 { ADD_ATTR: ["target", "rel"] },
               ),
             }}
@@ -145,7 +151,7 @@ export default function ChatMessage({
         )}
         {isStreaming && (
           <>
-            {!content && (
+            {!assistantContent && (
               <span className={classes.processingIndicator}>
                 <IconLoader2 size={16} className={classes.processingSpinner} />
                 Thinking
@@ -155,10 +161,10 @@ export default function ChatMessage({
           </>
         )}
       </div>
-      {!isStreaming && message.content && (
+      {!isStreaming && assistantContent && (
         <div className={classes.messageActions}>
           <CopyTextButton
-            text={message?.content}
+            text={assistantContent}
             label={t("Copy assistant response")}
           />
         </div>

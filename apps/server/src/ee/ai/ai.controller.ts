@@ -9,8 +9,9 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
-import { Workspace } from '@docmost/db/types/entity.types';
+import { User, Workspace } from '@docmost/db/types/entity.types';
 import { AiService } from './ai.service';
 
 @UseGuards(JwtAuthGuard)
@@ -22,14 +23,20 @@ export class AiController {
   @Post('generate')
   async generate(
     @Body() body: { action?: string; content: string; prompt?: string },
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.aiService.generate({ ...body, workspaceId: workspace.id });
+    return this.aiService.generate({
+      ...body,
+      workspaceId: workspace.id,
+      locale: user.locale,
+    });
   }
 
   @Post('generate/stream')
   async generateStream(
     @Body() body: { action?: string; content: string; prompt?: string },
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @Res() res: Response,
   ) {
@@ -45,6 +52,7 @@ export class AiController {
       for await (const chunk of this.aiService.generateStream({
         ...body,
         workspaceId: workspace.id,
+        locale: user.locale,
       })) {
         raw.write(`data: ${JSON.stringify(chunk)}\n\n`);
       }
