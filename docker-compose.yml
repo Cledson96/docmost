@@ -11,6 +11,8 @@ services:
       APP_SECRET: ${APP_SECRET}
       DATABASE_URL: postgresql://docmost:${POSTGRES_PASSWORD}@db:5432/docmost
       REDIS_URL: redis://redis:6379
+      GOTENBERG_URL: http://gotenberg:3000
+      PDF_RENDER_BASE_URL: http://docmost:3000
     ports:
       - "3000:3000"
     restart: unless-stopped
@@ -33,6 +35,16 @@ services:
     restart: unless-stopped
     volumes:
       - redis_data:/data
+
+  # Headless Chromium used only to render page exports to PDF.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    command:
+      - "gotenberg"
+      # Only ever asked to fetch this app's own render route.
+      - "--chromium-allow-list=^http://docmost:3000/.*"
+      - "--chromium-disable-javascript=false"
+    restart: unless-stopped
 
 volumes:
   docmost:

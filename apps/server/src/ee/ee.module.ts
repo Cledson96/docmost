@@ -7,6 +7,7 @@ import { AiChatModule } from './ai-chat/ai-chat.module';
 import { PageVerificationModule } from './page-verification/page-verification.module';
 import { McpModule } from './mcp/mcp.module';
 import { EmbeddingModule } from './embedding/embedding.module';
+import { PdfExportModule } from './pdf-export/pdf-export.module';
 
 @Module({
   imports: [
@@ -18,6 +19,7 @@ import { EmbeddingModule } from './embedding/embedding.module';
     PageVerificationModule,
     McpModule,
     EmbeddingModule,
+    PdfExportModule,
   ],
 })
 export class EeModule {}

@@ -17,6 +17,7 @@ import { useState } from "react";
 import { ExportFormat } from "@/features/page/types/page.types.ts";
 import { notifications } from "@mantine/notifications";
 import { exportSpace } from "@/features/space/services/space-service";
+import { exportPageToPdf } from "@/ee/pdf-export/services/pdf-export-service.ts";
 import { useTranslation } from "react-i18next";
 import { Feature } from "@/ee/features";
 import { useHasFeature } from "@/ee/hooks/use-feature";
@@ -42,6 +43,7 @@ export default function ExportModal({
   const { t } = useTranslation();
   const upgradeLabel = useUpgradeLabel();
   const isDocx = format === ExportFormat.Docx;
+  const isPdf = format === ExportFormat.Pdf;
   const docxEntitled = useHasFeature(Feature.DOCX_EXPORT);
   const blockedByLicense = isDocx && !docxEntitled;
 
@@ -51,6 +53,13 @@ export default function ExportModal({
       if (type === "page") {
         if (format === ExportFormat.Docx) {
           await exportPageToDocx({ pageId: id });
+        } else if (format === ExportFormat.Pdf) {
+          // Rendered by a headless browser on the server, so this waits on a
+          // background task instead of streaming straight back.
+          notifications.show({
+            message: t("Generating the PDF. This can take a few seconds."),
+          });
+          await exportPageToPdf({ pageId: id, includeChildren });
         } else {
           await exportPage({
             pageId: id,
@@ -69,7 +78,9 @@ export default function ExportModal({
       onClose();
     } catch (err) {
       notifications.show({
-        message: "Export failed:" + err.response?.data.message,
+        message:
+          "Export failed: " +
+          (err?.response?.data?.message ?? err?.message ?? ""),
         color: "red",
       });
       console.error("export error", err);
@@ -119,6 +130,11 @@ export default function ExportModal({
               <Group justify="space-between" wrap="nowrap">
                 <div>
                   <Text size="md">{t("Include subpages")}</Text>
+                  {isPdf && (
+                    <Text size="xs" c="dimmed">
+                      {t("Each subpage starts on a new page.")}
+                    </Text>
+                  )}
                 </div>
                 <Switch
                   onChange={(event) =>
@@ -128,17 +144,21 @@ export default function ExportModal({
                 />
               </Group>
 
-              <Group justify="space-between" wrap="nowrap" mt="md">
-                <div>
-                  <Text size="md">{t("Include attachments")}</Text>
-                </div>
-                <Switch
-                  onChange={(event) =>
-                    setIncludeAttachments(event.currentTarget.checked)
-                  }
-                  checked={includeAttachments}
-                />
-              </Group>
+              {/* A PDF embeds its images already; there is no folder to put
+                  attachments in. */}
+              {!isPdf && (
+                <Group justify="space-between" wrap="nowrap" mt="md">
+                  <div>
+                    <Text size="md">{t("Include attachments")}</Text>
+                  </div>
+                  <Switch
+                    onChange={(event) =>
+                      setIncludeAttachments(event.currentTarget.checked)
+                    }
+                    checked={includeAttachments}
+                  />
+                </Group>
+              )}
             </>
           )}
 
@@ -198,8 +218,12 @@ function ExportFormatSelection({
   const data = [
     { value: "markdown", label: "Markdown" },
     { value: "html", label: "HTML" },
+    // PDF is rendered from the page itself, which only makes sense per page.
     ...(includeDocx
-      ? [{ value: "docx", label: "Word (.docx)", disabled: !docxEntitled }]
+      ? [
+          { value: "pdf", label: "PDF" },
+          { value: "docx", label: "Word (.docx)", disabled: !docxEntitled },
+        ]
       : []),
   ];
 

@@ -120,13 +120,17 @@ export class TokenService {
   async generatePdfRenderToken(
     pageId: string,
     workspaceId: string,
+    fileTaskId: string,
   ): Promise<string> {
     const payload: JwtPdfRenderPayload = {
       pageId,
       workspaceId,
+      fileTaskId,
       type: JwtType.PDF_RENDER,
     };
-    return this.jwtService.sign(payload, { expiresIn: '60s' });
+    // Long enough for a headless browser to boot and load the page, short
+    // enough that a leaked render URL is worthless.
+    return this.jwtService.sign(payload, { expiresIn: '5m' });
   }
 
   async generatePdfExportDownloadToken(

@@ -16,6 +16,10 @@
 
 - Importação de arquivo único é síncrona; ZIP gera `fileTasks`, envia para storage e é processado em worker. O client consulta o status periodicamente e atualiza a árvore após sucesso.
 - Exportações HTML/Markdown de página e space são respostas HTTP nativas. Elas verificam acesso, filtram descendentes/anexos inacessíveis e registram auditoria.
+- Exportação PDF é assíncrona e vive em `apps/server/src/ee/pdf-export`. O fluxo é: `POST /pdf-export/page` valida `validateCanView`, cria `fileTasks` (`type=export`, `source=pdf`) e enfileira `PDF_EXPORT_TASK`; o worker chama Gotenberg (`GOTENBERG_URL`), que carrega `PDF_RENDER_BASE_URL/pdf-render/:pageId?token=` e imprime o próprio renderer do client; o PDF vai para storage e o client baixa por `POST /pdf-export/download`. Sem `GOTENBERG_URL` o recurso falha com mensagem explícita — não há fallback de Chromium embutido, de propósito, para a imagem do app não carregar um navegador.
+- O token `pdf_render` é a credencial do browser headless, que não tem sessão. Ele vale 5 minutos, carrega `includeChildren` e só libera a página para a qual foi emitido. `POST /pdf-export/render` é `@Public()` por isso; qualquer mudança ali é mudança de superfície de autenticação.
+- A rota client `/pdf-render/:pageId` renderiza em `printMode` e marca `data-pdf-ready="true"` quando terminou; Gotenberg espera esse seletor via `waitForExpression`. Remover esse atributo faz o PDF sair em branco.
+- PDFs gerados são descartáveis: `@Interval` enfileira `PDF_EXPORT_CLEANUP` a cada 6h e apaga arquivo e linha depois de 24h.
 - `StaticModule` só serve a SPA se `apps/client/dist` existir. Na inicialização ele injeta configuração runtime em `index.html`, cria template quando necessário e fornece fallback SPA sem cache. O diretório de build precisa ser gravável no runtime.
 
 ## Segurança, Saúde E Observabilidade

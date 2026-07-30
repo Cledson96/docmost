@@ -6,6 +6,10 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      # Not a hard dependency: only PDF export needs it, and the app must still
+      # come up if the renderer is unhealthy.
+      gotenberg:
+        condition: service_started
     environment:
       APP_URL: ${APP_URL:?defina APP_URL}
       APP_SECRET: ${APP_SECRET:?defina APP_SECRET}
@@ -19,6 +23,8 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       OLLAMA_API_URL: ${OLLAMA_API_URL:-}
+      GOTENBERG_URL: http://gotenberg:3000
+      PDF_RENDER_BASE_URL: http://docmost:3000
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
     restart: unless-stopped
@@ -71,6 +77,19 @@ services:
       # Host path, not a named volume: dumps must survive `docker volume rm`
       # and be trivially copied off the box.
       - ../backups:/backups
+
+  # Headless Chromium, used only to render page exports to PDF. Kept out of the
+  # app image so the image stays small on every deploy, and so a heavy render
+  # cannot starve the app of memory.
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    command:
+      - "gotenberg"
+      # It should only ever fetch this app's own render route.
+      - "--chromium-allow-list=^http://docmost:3000/.*"
+    restart: unless-stopped
+    # A render is short-lived; this keeps a runaway one from taking the box down.
+    mem_limit: 1g
 
   redis:
     image: redis:8

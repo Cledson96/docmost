@@ -51,6 +51,11 @@ export type JwtApiKeyPayload = {
 export type JwtPdfRenderPayload = {
   pageId: string;
   workspaceId: string;
+  /**
+   * The export whose authorized page list this token unlocks. Access is decided
+   * when the export is created, not at render time.
+   */
+  fileTaskId: string;
   type: 'pdf_render';
 };
 

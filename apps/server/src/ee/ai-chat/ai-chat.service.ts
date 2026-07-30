@@ -454,7 +454,9 @@ export class AiChatService {
         role: 'assistant',
         content: fullResponse,
         // Persisted so the steps survive a page reload, not just the stream.
-        toolCalls: JSON.stringify(toolCalls),
+        // Pass the array itself: JSON.stringify would be stored as a JSON
+        // *string* by postgres-js, and the client expects an array here.
+        toolCalls: toolCalls as any,
       })
       .returning(['id'])
       .executeTakeFirstOrThrow();

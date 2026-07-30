@@ -285,6 +285,8 @@
   "Type the space name <b>{{spaceName}}</b> to confirm your action.": "Digite o nome do espaço <b>{{spaceName}}</b> para confirmar sua ação.",
   "Format": "Formato",
   "Include subpages": "Incluir subpáginas",
+  "Each subpage starts on a new page.": "Cada subpágina começa em uma nova página.",
+  "Generating the PDF. This can take a few seconds.": "Gerando o PDF. Isso pode levar alguns segundos.",
   "Include attachments": "Incluir anexos",
   "Select export format": "Selecionado o formato para exportação",
   "Export failed:": "Falha ao exportar:",

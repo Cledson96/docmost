@@ -50,6 +50,26 @@ export class EnvironmentService {
     return this.configService.get<string>('APP_NAME', 'Gobrax Wiki');
   }
 
+  /**
+   * Origin Gotenberg loads the render page from. This is resolved inside the
+   * Docker network, not from the internet: pointing it at APP_URL would make
+   * PDF export depend on public DNS and TLS working from inside a container.
+   */
+  getPdfRenderBaseUrl(): string {
+    return this.configService.get<string>(
+      'PDF_RENDER_BASE_URL',
+      `http://docmost:${this.getPort()}`,
+    );
+  }
+
+  /** Per-step budget for the headless render, in milliseconds. */
+  getPdfExportTimeout(): number {
+    return parseInt(
+      this.configService.get<string>('PDF_EXPORT_TIMEOUT', '60000'),
+      10,
+    );
+  }
+
   getDatabaseURL(): string {
     return this.configService.get<string>('DATABASE_URL');
   }

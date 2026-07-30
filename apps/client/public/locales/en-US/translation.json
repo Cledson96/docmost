@@ -285,6 +285,8 @@
   "Type the space name <b>{{spaceName}}</b> to confirm your action.": "Type the space name <b>{{spaceName}}</b> to confirm your action.",
   "Format": "Format",
   "Include subpages": "Include subpages",
+  "Each subpage starts on a new page.": "Each subpage starts on a new page.",
+  "Generating the PDF. This can take a few seconds.": "Generating the PDF. This can take a few seconds.",
   "Include attachments": "Include attachments",
   "Select export format": "Select export format",
   "Export failed:": "Export failed:",
