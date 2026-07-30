@@ -60,6 +60,15 @@ import {
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
 
+/**
+ * Every revision we've tested against. Our initialize/tools/list/tools/call
+ * shape is a lowest-common-denominator subset (no resources, no batching, no
+ * server-initiated requests) that all three revisions accept as-is, so the
+ * safe move is to echo back whatever the client asked for.
+ */
+const SUPPORTED_PROTOCOL_VERSIONS = ['2024-11-05', '2025-03-26', '2025-06-18'];
+const LATEST_PROTOCOL_VERSION = '2025-06-18';
+
 /** Mirrors BasePropertyType on the client (apps/client/src/ee/base/types/base.types.ts). */
 const BASE_PROPERTY_TYPES = [
   'text',
@@ -124,7 +133,9 @@ export class McpService {
         jsonrpc: '2.0',
         id,
         result: {
-          protocolVersion: '2024-11-05',
+          protocolVersion: this.negotiateProtocolVersion(
+            params?.protocolVersion,
+          ),
           capabilities: {
             tools: {},
           },
@@ -204,6 +215,25 @@ export class McpService {
       return 'You do not have permission to perform this action.';
     }
     return err?.message || 'Unknown error';
+  }
+
+  /**
+   * Echo the client's requested version when we know it, instead of a fixed
+   * '2024-11-05'. A hardcoded old version made streamable-HTTP clients
+   * (Codex among them, which requires 2025-03-26+ for that transport) treat
+   * the server as incompatible and refuse to proceed, even though the actual
+   * request/response shape we send works unchanged across all three
+   * revisions. Falls back to the latest known version for a client we've
+   * never seen, per the spec's negotiation rule.
+   */
+  private negotiateProtocolVersion(requested: unknown): string {
+    if (
+      typeof requested === 'string' &&
+      SUPPORTED_PROTOCOL_VERSIONS.includes(requested)
+    ) {
+      return requested;
+    }
+    return LATEST_PROTOCOL_VERSION;
   }
 
   private getToolsList() {
