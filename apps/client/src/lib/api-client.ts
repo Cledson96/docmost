@@ -15,6 +15,7 @@ api.interceptors.response.use(
       "/api/spaces/export",
       "/api/docx-export",
       "/api/bases/export-csv",
+      "/api/pdf-export/download",
     ];
     if (response.request.responseURL) {
       const path = new URL(response.request.responseURL)?.pathname;

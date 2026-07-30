@@ -14,24 +14,34 @@ export async function requestPagePdf(data: {
   return req.data;
 }
 
-export async function downloadPagePdf(fileTaskId: string): Promise<void> {
+export async function downloadPagePdf(
+  fileTaskId: string,
+  fallbackName = "page.pdf",
+): Promise<void> {
   const req = await api.post(
     "/pdf-export/download",
     { fileTaskId },
     { responseType: "blob" },
   );
 
-  const header = req?.headers["content-disposition"] ?? "";
-  const rawName = header.split("filename=")[1]?.replace(/"/g, "") ?? "page.pdf";
+  // This endpoint is on the api-client's exempt list, so the full response is
+  // returned rather than just its body. Optional chaining anyway: if it ever
+  // drops off that list, the download should still work with the task's name
+  // instead of throwing on a missing header.
+  const header = req?.headers?.["content-disposition"] ?? "";
+  const rawName = header.split("filename=")[1]?.replace(/"/g, "");
 
-  let fileName = rawName;
-  try {
-    fileName = decodeURIComponent(rawName);
-  } catch {
-    // fallback to raw filename
+  let fileName = rawName || fallbackName;
+  if (rawName) {
+    try {
+      fileName = decodeURIComponent(rawName);
+    } catch {
+      // fallback to raw filename
+    }
   }
 
-  saveAs(req.data, fileName);
+  const blob = req?.data ?? req;
+  saveAs(blob, fileName);
 }
 
 /**
@@ -52,7 +62,7 @@ export async function exportPageToPdf(data: {
     const task = await getFileTaskById(fileTaskId);
 
     if (task.status === "success") {
-      await downloadPagePdf(fileTaskId);
+      await downloadPagePdf(fileTaskId, task.fileName);
       return;
     }
 

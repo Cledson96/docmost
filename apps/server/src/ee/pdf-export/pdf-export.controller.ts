@@ -55,6 +55,7 @@ export class PdfExportController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @HttpCode(HttpStatus.OK)
   @Post('download')
   async download(
     @Body() dto: PdfDownloadDto,
