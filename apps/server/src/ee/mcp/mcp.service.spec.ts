@@ -343,6 +343,26 @@ describe('McpService permissions', () => {
     expect(res.result.content[0].text).toContain('Comment not found');
   });
 
+  it('get_comment rejects a comment on a page the user cannot view', async () => {
+    const comment = {
+      id: 'comment-1',
+      pageId: 'page-1',
+      workspaceId: 'workspace-1',
+    };
+    const { service, deps } = buildService({
+      commentRepo: { findById: jest.fn().mockResolvedValue(comment) },
+    });
+    deps.pageAccessService.validateCanView.mockRejectedValue(
+      new ForbiddenException(),
+    );
+
+    const response: any = await callTool(service, 'get_comment', {
+      commentId: 'comment-1',
+    });
+
+    expect(response.result.isError).toBe(true);
+  });
+
   it('delete_comment lets a non-owner through only as space admin', async () => {
     const { service, deps } = buildService();
     deps.pageAccessService.validateCanComment = jest.fn();

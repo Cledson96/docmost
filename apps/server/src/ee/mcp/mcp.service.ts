@@ -1529,10 +1529,11 @@ export class McpService {
       }
 
       case 'get_comment': {
-        const { comment } = await this.getCommentInWorkspace(
+        const { comment, page } = await this.getCommentInWorkspace(
           args.commentId,
           workspace,
         );
+        await this.pageAccessService.validateCanView(page, user);
         return comment;
       }
 
