@@ -177,7 +177,7 @@ export class CommentNotificationService {
     });
     if (!notification) return;
 
-    const subject = `${actor.name} resolved a comment on ${pageTitle}`;
+    const subject = `${actor.name} resolveu um comentário em ${pageTitle}`;
 
     await this.notificationService.queueEmail(
       commentCreatorId,

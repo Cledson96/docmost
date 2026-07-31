@@ -328,7 +328,7 @@ export class WorkspaceInvitationService {
 
       await this.mailService.sendToQueue({
         to: invitedByUser.email,
-        subject: `${newUser.name} has accepted your Gobrax Wiki invite`,
+        subject: `${newUser.name} aceitou seu convite para a Gobrax Wiki`,
         template: emailTemplate,
       });
     }
@@ -477,7 +477,7 @@ export class WorkspaceInvitationService {
 
     await this.mailService.sendToQueue({
       to: inviteeEmail,
-      subject: `${invitedByName} invited you to Gobrax Wiki`,
+      subject: `${invitedByName} convidou você para a Gobrax Wiki`,
       template: emailTemplate,
     });
   }
