@@ -1,7 +1,7 @@
 import { Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, paragraph } from '../css/styles';
-import { EmailButton, MailBody } from '../partials/partials';
+import { EmailButton, Greeting, MailBody } from '../partials/partials';
 
 interface Props {
   actorName: string;
@@ -19,13 +19,13 @@ export const PermissionGrantedEmail = ({
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Greeting />
         <Text style={paragraph}>
-          <strong>{actorName}</strong> gave you {accessLabel} access to{' '}
+          <strong>{actorName}</strong> concedeu acesso de {accessLabel} a{' '}
           <strong>{pageTitle}</strong>.
         </Text>
       </Section>
-      <EmailButton href={pageUrl}>View</EmailButton>
+      <EmailButton href={pageUrl}>Ver página</EmailButton>
     </MailBody>
   );
 };
