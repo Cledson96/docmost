@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   Get,
   HttpCode,
   HttpStatus,
@@ -48,6 +49,9 @@ export class McpController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    if (!workspace?.settings?.['ai']?.mcp) {
+      throw new ForbiddenException('MCP is disabled for this workspace');
+    }
     return this.mcpService.handleRpcRequest(body, user, workspace);
   }
 }

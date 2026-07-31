@@ -35,7 +35,7 @@
 
 - O switch de workspace é `settings.ai.mcp`, alterado por `mcpEnabled` em `UpdateWorkspaceDto`. A atualização exige o recurso de licença `mcp` e é persistida por `WorkspaceRepo.updateAiSettings`.
 - A tela de IA em `apps/client/src/ee/ai/components/mcp-settings.tsx` mostra a URL `${APP_URL}/mcp`, habilita/desabilita o switch e orienta o uso de uma API key.
-- O controller e `McpService` não consultam `settings.ai.mcp`; atualmente o endpoint permanece disponível quando `EeModule` está carregado, condicionado à autenticação e às permissões. Se o switch precisar bloquear acesso, essa verificação deve ser implementada no caminho de requisição, não apenas na interface.
+- `POST /mcp` verifica `workspace.settings.ai.mcp` no controller e responde 403 (`ForbiddenException`) quando o switch está desligado ou nunca foi definido. O `GET /mcp` informativo permanece público e não consulta o switch.
 
 ## Alterações E Testes
 
