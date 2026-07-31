@@ -193,6 +193,12 @@ export class EmbeddingService {
     const embedding = await this.embedQuery(query, workspaceId);
     const vector = sql`${JSON.stringify(embedding)}::vector`;
 
+    // Vectors from different models live in unrelated spaces; comparing them
+    // yields plausible-looking noise (~0.05 cosine) rather than an error.
+    // Restricting to rows embedded by the current model turns a model switch
+    // into visibly empty results until reindex_embeddings rebuilds the index.
+    const currentModel = await this.modelName(workspaceId);
+
     const rows = await this.db
       .selectFrom('pageEmbeddings')
       .innerJoin('pages', 'pages.id', 'pageEmbeddings.pageId')
@@ -211,6 +217,7 @@ export class EmbeddingService {
       ])
       .where('pageEmbeddings.workspaceId', '=', workspaceId)
       .where('pageEmbeddings.spaceId', 'in', spaceIds)
+      .where('pageEmbeddings.modelName', '=', currentModel)
       .where('pages.deletedAt', 'is', null)
       // Over-fetch: several chunks of one page can crowd the top; the
       // page-permission filter below (after dedup) is what drops pages the
@@ -250,11 +257,17 @@ export class EmbeddingService {
       }));
   }
 
-  /** Pages in the workspace that have no embeddings yet. */
+  /**
+   * Pages with no embeddings for the CURRENT model. Rows left behind by a
+   * previous model count as unindexed, so reindex_embeddings heals a model
+   * switch instead of skipping every page as already done.
+   */
   async findUnindexedPageIds(
     workspaceId: string,
     limit: number,
   ): Promise<string[]> {
+    const currentModel = await this.modelName(workspaceId);
+
     const rows = await this.db
       .selectFrom('pages')
       .select('pages.id')
@@ -266,7 +279,8 @@ export class EmbeddingService {
             eb
               .selectFrom('pageEmbeddings')
               .select('pageEmbeddings.id')
-              .whereRef('pageEmbeddings.pageId', '=', 'pages.id'),
+              .whereRef('pageEmbeddings.pageId', '=', 'pages.id')
+              .where('pageEmbeddings.modelName', '=', currentModel),
           ),
         ),
       )
@@ -277,10 +291,13 @@ export class EmbeddingService {
   }
 
   async countIndexedPages(workspaceId: string): Promise<number> {
+    const currentModel = await this.modelName(workspaceId);
+
     const row = await this.db
       .selectFrom('pageEmbeddings')
       .select((eb) => eb.fn.count<string>('pageId').distinct().as('count'))
       .where('workspaceId', '=', workspaceId)
+      .where('modelName', '=', currentModel)
       .executeTakeFirst();
 
     return Number(row?.count ?? 0);
