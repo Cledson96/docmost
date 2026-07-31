@@ -41,9 +41,11 @@ describe('EmbeddingService.search', () => {
     service.pagePermissionRepo = {
       filterAccessiblePageIds: jest.fn().mockResolvedValue(['page-a']),
     };
-    service.embeddingModel = jest.fn().mockResolvedValue({});
-    service.providerOptions = jest.fn().mockResolvedValue({});
+    // search() reaches for exactly these four: db, embedQuery, modelName and
+    // pagePermissionRepo. Keep this list aligned with it — a new dependency
+    // inside search() surfaces here as an undefined-property TypeError.
     service.embedQuery = jest.fn().mockResolvedValue([0.1, 0.2]);
+    service.modelName = jest.fn().mockResolvedValue('text-embedding-3-small');
 
     const results = await service.search({
       query: 'alpha',
@@ -60,6 +62,13 @@ describe('EmbeddingService.search', () => {
       pageIds: ['page-a', 'page-b'],
       userId: 'user-1',
     });
+    // Vectors from a previous model must not be compared against the current
+    // one — the query is restricted to rows the resolved model embedded.
+    expect(query.where).toHaveBeenCalledWith(
+      'pageEmbeddings.modelName',
+      '=',
+      'text-embedding-3-small',
+    );
   });
 
   it('returns nothing when the user has no spaces', async () => {

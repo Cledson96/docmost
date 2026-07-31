@@ -185,7 +185,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(\\.pnpm/)?(nanoid|uuid|image-dimensions|marked|happy-dom|lib0|y-protocols|yjs)(@|/))"
+      "/node_modules/(?!(\\.pnpm/)?(nanoid|uuid|image-dimensions|marked|happy-dom|lib0|y-protocols|yjs|escape-string-regexp|@sindresorhus[+/]slugify)(@|/))"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
