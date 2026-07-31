@@ -2,12 +2,13 @@
 
 ## Desenvolvimento E Verificação
 
-- Use Node 22 e pnpm 10.4.0. Instale com `pnpm install --frozen-lockfile`.
+- Use Node 22 e pnpm 10.18.3. Instale com `pnpm install --frozen-lockfile`.
+- As configurações do pnpm (`overrides`, `patchedDependencies`) ficam em `pnpm-workspace.yaml`, não no campo `pnpm` do `package.json` — o pnpm 11 ignora esse campo silenciosamente.
 - `pnpm dev` inicia Vite e o servidor Nest juntos. Para trabalho isolado, use scripts filtrados, por exemplo `pnpm --filter client build` ou `pnpm --filter server test -- <teste>`.
 - Cliente: `pnpm --filter client lint`, `pnpm --filter client test -- <teste>` e `pnpm --filter client build`. O build executa `tsc` antes do Vite.
 - Servidor: `pnpm --filter server test -- <teste>`, `pnpm --filter server test:e2e` e `pnpm --filter server build`. Unit tests usam `src/**/*.spec.ts`; E2E usam `test/*.e2e-spec.ts`.
 - `pnpm --filter server lint` executa ESLint com `--fix` e modifica arquivos. O lint do client não corrige automaticamente.
-- `pnpm build` executa o build completo Nx com dependências na ordem correta. O CI de `main` só instala com lockfile congelado e roda esse comando.
+- `pnpm build` executa o build completo Nx com dependências na ordem correta. O CI de `main` instala com lockfile congelado, roda esse comando e depois os testes unitários de server e client.
 
 ## Dependências E Banco
 
@@ -17,6 +18,7 @@
 
 ## Docker E Deploy
 
-- `Dockerfile` é a fonte do artefato publicado: instala pnpm 10.4.0, executa instalação congelada e `pnpm build`, e copia os `dist` necessários para a imagem final.
-- Push em `main` dispara `.github/workflows/deploy.yml`: valida `pnpm build`, publica uma imagem GHCR e atualiza a VPS. Consulte `docs/deployment.md` antes de modificar deploy, variáveis ou volumes.
+- `Dockerfile` é a fonte do artefato publicado: instala pnpm 10.18.3, executa instalação congelada e `pnpm build`, e copia os `dist` necessários para a imagem final.
+- Push em `main` dispara `.github/workflows/deploy.yml`: valida build e testes, publica uma imagem GHCR e atualiza a VPS. Consulte `docs/deployment.md` antes de modificar deploy, variáveis ou volumes.
 - A inicialização de produção aplica migrations pendentes. Não dependa disso para desenvolvimento local ou para validar uma migration antes do deploy.
+- `scripts/deploy-docker.sh` gera um dump pré-deploy do banco antes do `compose up` (aborta se o dump falhar) e, em healthcheck falho, tenta rollback automático para a imagem anterior antes de encerrar com erro.

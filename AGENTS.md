@@ -8,9 +8,10 @@
 
 ## Workspace
 
-- Use Node 22 and pnpm 10.4.0; install with `pnpm install --frozen-lockfile`.
+- Use Node 22 and pnpm 10.18.3; install with `pnpm install --frozen-lockfile`.
+- pnpm settings (`overrides`, `patchedDependencies`) live in `pnpm-workspace.yaml`, not in the `pnpm` field of `package.json` — pnpm 11 silently ignores the latter.
 - This is an Nx/pnpm workspace: `apps/client` is the Vite/React app, `apps/server` is the NestJS/Fastify API, and `packages/editor-ext` plus `packages/base-formula` are buildable shared packages.
-- Use `pnpm build` for the complete, dependency-ordered build. It is the only validation run by the `main` deployment CI.
+- Use `pnpm build` for the complete, dependency-ordered build. The `main` deployment CI runs it plus the server and client unit tests.
 - `pnpm dev` runs the client and server together. The server listens on port 3000; the Vite client proxies `/api`, `/socket.io`, and `/collab` to `APP_URL` from the root `.env`.
 
 ## Environment And Data
