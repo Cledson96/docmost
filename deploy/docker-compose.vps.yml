@@ -25,6 +25,16 @@ services:
       OLLAMA_API_URL: ${OLLAMA_API_URL:-}
       GOTENBERG_URL: http://gotenberg:3000
       PDF_RENDER_BASE_URL: http://docmost:3000
+      # Unset MAIL_DRIVER falls back to the log driver, which drops mail
+      # silently in production. Keep these in sync with deploy.yml.
+      MAIL_DRIVER: ${MAIL_DRIVER:-log}
+      MAIL_FROM_ADDRESS: ${MAIL_FROM_ADDRESS:-}
+      MAIL_FROM_NAME: ${MAIL_FROM_NAME:-Gobrax Wiki}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_SECURE: ${SMTP_SECURE:-false}
+      SMTP_USERNAME: ${SMTP_USERNAME:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
     ports:
       - "127.0.0.1:${APP_PORT:-3000}:3000"
     restart: unless-stopped

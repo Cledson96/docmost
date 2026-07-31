@@ -108,6 +108,17 @@ jobs:
       AI_DRIVER: ${{ vars.AI_DRIVER || 'openai' }}
       AI_COMPLETION_MODEL: ${{ vars.AI_COMPLETION_MODEL || 'gpt-4o-mini' }}
       AI_CHAT_MODEL: ${{ vars.AI_CHAT_MODEL || 'gpt-4o-mini' }}
+      # Without these the server falls back to the log driver, which in
+      # production returns without sending and without logging — mail silently
+      # disappears. Defaults to Gmail; override the host/port vars for a
+      # different provider.
+      MAIL_DRIVER: ${{ vars.MAIL_DRIVER || 'smtp' }}
+      MAIL_FROM_ADDRESS: ${{ vars.MAIL_FROM_ADDRESS }}
+      MAIL_FROM_NAME: ${{ vars.MAIL_FROM_NAME || 'Gobrax Wiki' }}
+      SMTP_HOST: ${{ vars.SMTP_HOST || 'smtp.gmail.com' }}
+      SMTP_PORT: ${{ vars.SMTP_PORT || '587' }}
+      SMTP_SECURE: ${{ vars.SMTP_SECURE || 'false' }}
+      SMTP_USERNAME: ${{ vars.SMTP_USERNAME }}
     steps:
       - name: Checkout infrastructure
         uses: actions/checkout@v4
@@ -122,22 +133,39 @@ jobs:
 
       - name: Generate production environment
         shell: bash
+        env:
+          APP_SECRET: ${{ secrets.APP_SECRET }}
+          POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY || '' }}
+          OLLAMA_API_URL: ${{ vars.OLLAMA_API_URL || '' }}
+          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD || '' }}
         run: |
           umask 077
-          cat > /tmp/docmost.env <<EOF
-          WEB_IMAGE=${IMAGE}:${GITHUB_SHA}
-          APP_PORT=${APP_PORT}
-          APP_URL=${APP_URL}
-          APP_SECRET=${{ secrets.APP_SECRET }}
-          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
-          AI_DRIVER=${AI_DRIVER}
-          AI_COMPLETION_MODEL=${AI_COMPLETION_MODEL}
-          AI_CHAT_MODEL=${AI_CHAT_MODEL}
-          OPENAI_API_KEY=${OPENAI_API_KEY}
-          GEMINI_API_KEY=${{ secrets.GEMINI_API_KEY || '' }}
-          OLLAMA_API_URL=${{ vars.OLLAMA_API_URL || '' }}
-          EOF
-          sed -i 's/^          //' /tmp/docmost.env
+          # printf, not a heredoc: the previous unquoted <<EOF let the shell
+          # expand any $ or `...` inside a secret, so a password containing one
+          # reached the container mangled. Values arrive as env vars and are
+          # written verbatim.
+          {
+            printf 'WEB_IMAGE=%s\n' "${IMAGE}:${GITHUB_SHA}"
+            printf 'APP_PORT=%s\n' "$APP_PORT"
+            printf 'APP_URL=%s\n' "$APP_URL"
+            printf 'APP_SECRET=%s\n' "$APP_SECRET"
+            printf 'POSTGRES_PASSWORD=%s\n' "$POSTGRES_PASSWORD"
+            printf 'AI_DRIVER=%s\n' "$AI_DRIVER"
+            printf 'AI_COMPLETION_MODEL=%s\n' "$AI_COMPLETION_MODEL"
+            printf 'AI_CHAT_MODEL=%s\n' "$AI_CHAT_MODEL"
+            printf 'OPENAI_API_KEY=%s\n' "$OPENAI_API_KEY"
+            printf 'GEMINI_API_KEY=%s\n' "$GEMINI_API_KEY"
+            printf 'OLLAMA_API_URL=%s\n' "$OLLAMA_API_URL"
+            printf 'MAIL_DRIVER=%s\n' "$MAIL_DRIVER"
+            printf 'MAIL_FROM_ADDRESS=%s\n' "$MAIL_FROM_ADDRESS"
+            printf 'MAIL_FROM_NAME=%s\n' "$MAIL_FROM_NAME"
+            printf 'SMTP_HOST=%s\n' "$SMTP_HOST"
+            printf 'SMTP_PORT=%s\n' "$SMTP_PORT"
+            printf 'SMTP_SECURE=%s\n' "$SMTP_SECURE"
+            printf 'SMTP_USERNAME=%s\n' "$SMTP_USERNAME"
+            printf 'SMTP_PASSWORD=%s\n' "$SMTP_PASSWORD"
+          } > /tmp/docmost.env
 
       - name: Upload release infrastructure
         shell: bash
