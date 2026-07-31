@@ -17,6 +17,7 @@ import { ContentOperation } from '../../core/page/dto/update-page.dto';
 import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { EmbeddingService } from '../embedding/embedding.service';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import {
   editRefusalNotice,
   languageFromLocale,
@@ -45,6 +46,7 @@ export class AiChatService {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly embeddingService: EmbeddingService,
     private readonly environmentService: EnvironmentService,
+    private readonly pagePermissionRepo: PagePermissionRepo,
   ) {}
 
   async createChat(userId: string, workspaceId: string) {
@@ -644,6 +646,7 @@ export class AiChatService {
       const pages = await this.textSearchPages({
         query: trimmed,
         workspaceId,
+        userId,
         spaceIds,
         exclude,
       });
@@ -658,10 +661,11 @@ export class AiChatService {
   private async textSearchPages(opts: {
     query: string;
     workspaceId: string;
+    userId: string;
     spaceIds: string[];
     exclude: Set<string>;
   }): Promise<Array<{ id: string; title: string; excerpt: string }>> {
-    const { query, workspaceId, spaceIds, exclude } = opts;
+    const { query, workspaceId, userId, spaceIds, exclude } = opts;
 
     // Prefix matching on every word, which is what makes short questions match
     // partial titles. Punctuation is stripped so it cannot break to_tsquery.
@@ -693,8 +697,20 @@ export class AiChatService {
       .limit(RETRIEVAL_LIMIT + exclude.size)
       .execute();
 
-    return rows
-      .filter((row) => !exclude.has(row.id))
+    const candidates = rows.filter((row) => !exclude.has(row.id));
+
+    // Full-text search ignores page-level restrictions, same as the semantic
+    // path in EmbeddingService.search. Filter before slicing so a restricted
+    // page does not silently crowd out an accessible one within the limit.
+    const accessible = new Set(
+      await this.pagePermissionRepo.filterAccessiblePageIds({
+        pageIds: candidates.map((row) => row.id),
+        userId,
+      }),
+    );
+
+    return candidates
+      .filter((row) => accessible.has(row.id))
       .slice(0, RETRIEVAL_LIMIT)
       .map((row) => ({
         id: row.id,

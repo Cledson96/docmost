@@ -18,6 +18,7 @@ import { languageFromLocale } from './ai-language.util';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { sql } from 'kysely';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
@@ -27,6 +28,7 @@ export class AiAnswersController {
     private readonly providerFactory: AiProviderFactory,
     private readonly environmentService: EnvironmentService,
     private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pagePermissionRepo: PagePermissionRepo,
   ) {}
 
   @Post('answers')
@@ -101,7 +103,21 @@ export class AiAnswersController {
         searchQuery = searchQuery.where('spaceId', '=', body.spaceId);
       }
 
-      const pages = await searchQuery.execute();
+      const candidatePages = await searchQuery.execute();
+
+      // Full-text search ignores page-level restrictions, so a match within a
+      // space the user belongs to can still be a page they are individually
+      // barred from. Drop those before any excerpt or content reaches the
+      // sources list or the model prompt.
+      const accessiblePageIds = new Set(
+        await this.pagePermissionRepo.filterAccessiblePageIds({
+          pageIds: candidatePages.map((page) => page.id),
+          userId: user.id,
+        }),
+      );
+      const pages = candidatePages.filter((page) =>
+        accessiblePageIds.has(page.id),
+      );
 
       // Get space slugs for sources
       const sources = [];

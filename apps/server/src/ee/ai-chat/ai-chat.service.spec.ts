@@ -63,6 +63,7 @@ function build(overrides: {
     {} as any,
     {} as any,
     mocks.environmentService as any,
+    {} as any,
   );
 
   return { service, mocks };
@@ -230,5 +231,88 @@ describe('AiChatService system prompt', () => {
 
   it('warns the model off destructive replaces', () => {
     expect(prompt()).toMatch(/Never use "replace"/);
+  });
+});
+
+describe('AiChatService.textSearchPages permission filtering', () => {
+  function buildQuery(rows: unknown[]) {
+    const query: any = {
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      orderBy: jest.fn(() => query),
+      limit: jest.fn(() => query),
+      execute: jest.fn().mockResolvedValue(rows),
+    };
+    return query;
+  }
+
+  function buildService(rows: unknown[], accessiblePageIds: string[]) {
+    const query = buildQuery(rows);
+    const db = { selectFrom: jest.fn(() => query) };
+    const pagePermissionRepo = {
+      filterAccessiblePageIds: jest.fn().mockResolvedValue(accessiblePageIds),
+    };
+
+    const service = new AiChatService(
+      db as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      { getAppName: jest.fn() } as any,
+      pagePermissionRepo as any,
+    );
+
+    return { service, pagePermissionRepo, query };
+  }
+
+  it('drops pages the user cannot read from the full-text fallback', async () => {
+    const rows = [
+      { id: 'page-a', title: 'A', textContent: 'alpha text' },
+      { id: 'page-b', title: 'B', textContent: 'beta text' },
+    ];
+    const { service, pagePermissionRepo } = buildService(rows, ['page-a']);
+
+    const result = await (service as any).textSearchPages({
+      query: 'alpha search term',
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      spaceIds: ['space-1'],
+      exclude: new Set<string>(),
+    });
+
+    // If the permission filter were removed, both rows would survive and this
+    // would equal ['page-a', 'page-b'] instead.
+    expect(result.map((r: any) => r.id)).toEqual(['page-a']);
+    expect(pagePermissionRepo.filterAccessiblePageIds).toHaveBeenCalledWith({
+      pageIds: ['page-a', 'page-b'],
+      userId: 'user-1',
+    });
+  });
+
+  it('excludes already-in-context pages before checking permissions', async () => {
+    const rows = [
+      { id: 'page-a', title: 'A', textContent: 'alpha text' },
+      { id: 'page-b', title: 'B', textContent: 'beta text' },
+    ];
+    const { service, pagePermissionRepo } = buildService(rows, [
+      'page-a',
+      'page-b',
+    ]);
+
+    await (service as any).textSearchPages({
+      query: 'alpha search term',
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      spaceIds: ['space-1'],
+      exclude: new Set(['page-b']),
+    });
+
+    expect(pagePermissionRepo.filterAccessiblePageIds).toHaveBeenCalledWith({
+      pageIds: ['page-a'],
+      userId: 'user-1',
+    });
   });
 });

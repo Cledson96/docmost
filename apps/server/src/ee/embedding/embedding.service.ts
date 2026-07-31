@@ -212,8 +212,9 @@ export class EmbeddingService {
       .where('pageEmbeddings.workspaceId', '=', workspaceId)
       .where('pageEmbeddings.spaceId', 'in', spaceIds)
       .where('pages.deletedAt', 'is', null)
-      // Over-fetch: several chunks of one page can crowd the top, and the
-      // caller still has to drop pages the user cannot read.
+      // Over-fetch: several chunks of one page can crowd the top; the
+      // page-permission filter below (after dedup) is what drops pages the
+      // user cannot read, not the caller.
       .orderBy(sql`page_embeddings.embedding <=> ${vector}`)
       .limit(limit * 5)
       .execute();
