@@ -1,7 +1,7 @@
 import { Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, paragraph } from '../css/styles';
-import { EmailButton, MailBody } from '../partials/partials';
+import { EmailButton, Greeting, MailBody } from '../partials/partials';
 
 interface Props {
   actorName: string;
@@ -13,13 +13,13 @@ export const PageMentionEmail = ({ actorName, pageTitle, pageUrl }: Props) => {
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Greeting />
         <Text style={paragraph}>
-          <strong>{actorName}</strong> mentioned you in{' '}
+          <strong>{actorName}</strong> mencionou você em{' '}
           <strong>{pageTitle}</strong>.
         </Text>
       </Section>
-      <EmailButton href={pageUrl}>View</EmailButton>
+      <EmailButton href={pageUrl}>Ver página</EmailButton>
     </MailBody>
   );
 };
