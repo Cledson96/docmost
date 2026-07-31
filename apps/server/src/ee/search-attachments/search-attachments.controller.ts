@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  ForbiddenException,
   HttpCode,
   HttpStatus,
   Post,
@@ -12,6 +13,11 @@ import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator'
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
 import { IsNotEmpty, IsString, IsOptional, IsUUID } from 'class-validator';
+import WorkspaceAbilityFactory from '../../core/casl/abilities/workspace-ability.factory';
+import {
+  WorkspaceCaslAction,
+  WorkspaceCaslSubject,
+} from '../../core/casl/interfaces/workspace-ability.type';
 
 class SearchAttachmentsDto {
   @IsString()
@@ -23,16 +29,13 @@ class SearchAttachmentsDto {
   spaceId?: string;
 }
 
-class IndexAttachmentsDto {
-  @IsUUID()
-  @IsOptional()
-  workspaceId?: string;
-}
-
 @UseGuards(JwtAuthGuard)
 @Controller('search-attachments')
 export class SearchAttachmentsController {
-  constructor(private readonly searchService: SearchAttachmentsService) {}
+  constructor(
+    private readonly searchService: SearchAttachmentsService,
+    private readonly workspaceAbility: WorkspaceAbilityFactory,
+  ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post()
@@ -41,16 +44,28 @@ export class SearchAttachmentsController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.searchService.search(dto.query, workspace.id, dto.spaceId);
+    return this.searchService.search(
+      dto.query,
+      workspace.id,
+      user.id,
+      dto.spaceId,
+    );
   }
 
   @HttpCode(HttpStatus.OK)
   @Post('indexing')
   async triggerIndexing(
-    @Body() dto: IndexAttachmentsDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    const wsId = dto.workspaceId || workspace.id;
-    return this.searchService.triggerIndexing(wsId);
+    const ability = this.workspaceAbility.createForUser(user, workspace);
+    if (
+      ability.cannot(WorkspaceCaslAction.Manage, WorkspaceCaslSubject.Settings)
+    ) {
+      throw new ForbiddenException();
+    }
+
+    // The workspace comes from the session, never from the body.
+    return this.searchService.triggerIndexing(workspace.id);
   }
 }

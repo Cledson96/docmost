@@ -2068,6 +2068,7 @@ export class McpService {
         const { items } = await this.searchAttachmentsService.search(
           args.query,
           workspace.id,
+          user.id,
           args.spaceId,
         );
 
@@ -2924,6 +2925,7 @@ export class McpService {
       const { items } = await this.searchAttachmentsService.search(
         query,
         workspace.id,
+        user.id,
         spaceId,
       );
 
