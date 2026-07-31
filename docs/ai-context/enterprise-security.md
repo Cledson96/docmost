@@ -10,6 +10,7 @@
 
 - UI, migrations e endpoints de verificação existem em `src/ee/page-verification` e `src/ee/page-verification` do client. O schema suporta status, vencimento, aprovadores e notificações.
 - Neste checkout, apenas a leitura de informação de verificação acessa dados; mutações retornam sucesso e listagem retorna vazia. Trate o workflow como incompleto até que o serviço implemente as operações.
+- `getVerificationInfo` falha fechado: erro de banco registra log de erro e devolve permissões todas `false`, nunca permissivas.
 
 ## SSO, SCIM E MFA
 

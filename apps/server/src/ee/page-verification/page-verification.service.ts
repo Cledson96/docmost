@@ -1,14 +1,16 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 
 @Injectable()
 export class PageVerificationService {
+  private readonly logger = new Logger(PageVerificationService.name);
+
   constructor(@InjectKysely() private readonly db: KyselyDB) {}
 
   async getVerificationInfo(pageId: string, workspaceId: string) {
     try {
-      const verification = await (this.db as any)
+      const verification = await this.db
         .selectFrom('pageVerifications')
         .selectAll()
         .where('pageId', '=', pageId)
@@ -36,14 +38,19 @@ export class PageVerificationService {
           canMarkObsolete: true,
         },
       };
-    } catch {
+    } catch (err) {
+      // Fail closed: a lookup failure must not grant management rights.
+      this.logger.error(
+        `Failed to load verification info for page ${pageId}`,
+        err instanceof Error ? err.stack : String(err),
+      );
       return {
         status: 'none',
         permissions: {
-          canVerify: true,
-          canManage: true,
-          canSubmitForApproval: true,
-          canMarkObsolete: true,
+          canVerify: false,
+          canManage: false,
+          canSubmitForApproval: false,
+          canMarkObsolete: false,
         },
       };
     }
