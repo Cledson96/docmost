@@ -45,92 +45,166 @@ function build() {
 
 const res = { header: jest.fn(), send: jest.fn() } as any;
 
-// [endpoint, invocação, guarda esperada]
-const readEndpoints: [string, (c: BaseController) => Promise<unknown>][] = [
-  ['info', (c) => c.getBaseInfo({ pageId: 'page-1' } as any, workspace)],
+// [endpoint, invocação, args esperados na guarda de leitura/edição]
+const readEndpoints: [
+  string,
+  (c: BaseController) => Promise<unknown>,
+  unknown[],
+][] = [
+  [
+    'info',
+    (c) => c.getBaseInfo({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
+  ],
   [
     'rows/info',
-    (c) => c.getRowInfo({ pageId: 'page-1', rowId: 'row-1' } as any, workspace),
+    (c) =>
+      c.getRowInfo(
+        { pageId: 'page-1', rowId: 'row-1' } as any,
+        user,
+        workspace,
+      ),
+    ['page-1', user, 'workspace-1'],
   ],
-  ['rows', (c) => c.listRows({ pageId: 'page-1' } as any, workspace)],
-  ['views', (c) => c.listViews({ pageId: 'page-1' } as any, workspace)],
+  [
+    'rows',
+    (c) => c.listRows({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
+  ],
+  [
+    'views',
+    (c) => c.listViews({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
+  ],
   [
     'export-csv',
-    (c) => c.exportBaseToCsv({ pageId: 'page-1' } as any, workspace, res),
+    (c) =>
+      c.exportBaseToCsv({ pageId: 'page-1' } as any, user, workspace, res),
+    ['page-1', user, 'workspace-1'],
   ],
 ];
 
-const writeEndpoints: [string, (c: BaseController) => Promise<unknown>][] = [
-  ['update', (c) => c.updateBase({ pageId: 'page-1' } as any, workspace)],
-  ['delete', (c) => c.deleteBase({ pageId: 'page-1' } as any, workspace)],
+const writeEndpoints: [
+  string,
+  (c: BaseController) => Promise<unknown>,
+  unknown[],
+][] = [
+  [
+    'update',
+    (c) => c.updateBase({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
+  ],
+  [
+    'delete',
+    (c) => c.deleteBase({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
+  ],
   [
     'properties/create',
-    (c) => c.createProperty({ pageId: 'page-1' } as any, workspace),
+    (c) => c.createProperty({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'properties/update',
-    (c) => c.updateProperty({ pageId: 'page-1' } as any, workspace),
+    (c) => c.updateProperty({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'properties/delete',
     (c) =>
       c.deleteProperty(
         { pageId: 'page-1', propertyId: 'prop-1' } as any,
+        user,
         workspace,
       ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'properties/reorder',
     (c) =>
       c.reorderProperty(
         { pageId: 'page-1', propertyId: 'prop-1', position: 'a' } as any,
+        user,
         workspace,
       ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'rows/create',
     (c) => c.createRow({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'rows/update',
     (c) =>
-      c.updateRow({ pageId: 'page-1', rowId: 'row-1' } as any, user, workspace),
+      c.updateRow(
+        { pageId: 'page-1', rowId: 'row-1' } as any,
+        user,
+        workspace,
+      ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'rows/delete',
-    (c) => c.deleteRow({ pageId: 'page-1', rowId: 'row-1' } as any, workspace),
+    (c) =>
+      c.deleteRow(
+        { pageId: 'page-1', rowId: 'row-1' } as any,
+        user,
+        workspace,
+      ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'rows/delete-many',
     (c) =>
-      c.deleteRows({ pageId: 'page-1', rowIds: ['row-1'] } as any, workspace),
+      c.deleteRows(
+        { pageId: 'page-1', rowIds: ['row-1'] } as any,
+        user,
+        workspace,
+      ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'rows/reorder',
     (c) =>
       c.reorderRow(
         { pageId: 'page-1', rowId: 'row-1', position: 'a' } as any,
+        user,
         workspace,
       ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'views/create',
     (c) => c.createView({ pageId: 'page-1' } as any, user, workspace),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'views/update',
-    (c) => c.updateView({ pageId: 'page-1', viewId: 'v-1' } as any, workspace),
+    (c) =>
+      c.updateView(
+        { pageId: 'page-1', viewId: 'v-1' } as any,
+        user,
+        workspace,
+      ),
+    ['page-1', user, 'workspace-1'],
   ],
   [
     'views/delete',
-    (c) => c.deleteView({ pageId: 'page-1', viewId: 'v-1' } as any, workspace),
+    (c) =>
+      c.deleteView(
+        { pageId: 'page-1', viewId: 'v-1' } as any,
+        user,
+        workspace,
+      ),
+    ['page-1', user, 'workspace-1'],
   ],
 ];
 
 describe('BaseController authorization', () => {
   it.each(readEndpoints)(
     '%s refuses a base the user cannot view',
-    async (_name, call) => {
+    async (_name, call, expectedArgs) => {
       const { controller, access, baseService } = build();
       access.assertCanViewBase.mockRejectedValue(new ForbiddenException());
 
@@ -138,6 +212,7 @@ describe('BaseController authorization', () => {
         ForbiddenException,
       );
 
+      expect(access.assertCanViewBase).toHaveBeenCalledWith(...expectedArgs);
       for (const fn of Object.values(baseService)) {
         expect(fn).not.toHaveBeenCalled();
       }
@@ -146,7 +221,7 @@ describe('BaseController authorization', () => {
 
   it.each(writeEndpoints)(
     '%s refuses a base the user cannot edit',
-    async (_name, call) => {
+    async (_name, call, expectedArgs) => {
       const { controller, access, baseService } = build();
       access.assertCanEditBase.mockRejectedValue(new ForbiddenException());
 
@@ -154,6 +229,7 @@ describe('BaseController authorization', () => {
         ForbiddenException,
       );
 
+      expect(access.assertCanEditBase).toHaveBeenCalledWith(...expectedArgs);
       for (const fn of Object.values(baseService)) {
         expect(fn).not.toHaveBeenCalled();
       }
@@ -165,8 +241,9 @@ describe('BaseController authorization', () => {
     access.assertCanViewSpace.mockRejectedValue(new ForbiddenException());
 
     await expect(
-      controller.listBases({ spaceId: 'space-1' } as any, workspace),
+      controller.listBases({ spaceId: 'space-1' } as any, user, workspace),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(access.assertCanViewSpace).toHaveBeenCalledWith('space-1', user);
     expect(baseService.listBases).not.toHaveBeenCalled();
   });
 
@@ -177,6 +254,10 @@ describe('BaseController authorization', () => {
     await expect(
       controller.createBase({ spaceId: 'space-1' } as any, user, workspace),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(access.assertCanCreateInSpace).toHaveBeenCalledWith(
+      'space-1',
+      user,
+    );
     expect(baseService.createBase).not.toHaveBeenCalled();
   });
 
@@ -191,6 +272,11 @@ describe('BaseController authorization', () => {
         workspace,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(access.assertCanEditPage).toHaveBeenCalledWith(
+      'parent-1',
+      user,
+      'workspace-1',
+    );
     expect(baseService.createBase).not.toHaveBeenCalled();
   });
 
@@ -205,13 +291,18 @@ describe('BaseController authorization', () => {
         workspace,
       ),
     ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(access.assertCanEditPage).toHaveBeenCalledWith(
+      'page-1',
+      user,
+      'workspace-1',
+    );
     expect(baseService.convertPageToBase).not.toHaveBeenCalled();
   });
 
   it('lets an authorized read through', async () => {
     const { controller, baseService } = build();
 
-    await controller.getBaseInfo({ pageId: 'page-1' } as any, workspace);
+    await controller.getBaseInfo({ pageId: 'page-1' } as any, user, workspace);
 
     expect(baseService.getBaseInfo).toHaveBeenCalledWith(
       'page-1',
