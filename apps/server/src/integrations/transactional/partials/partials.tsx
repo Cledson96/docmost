@@ -44,7 +44,7 @@ export function MailHeader() {
           the first mail from an unknown sender, which is exactly the invite
           case, and the header would otherwise render empty. */}
       <Img
-        src={`${process.env.APP_URL || ''}/gobrax-wiki-logo.png`}
+        src={`${(process.env.APP_URL || '').replace(/\/$/, '')}/gobrax-wiki-logo.png`}
         alt="Gobrax Wiki"
         width="104"
         height="36"

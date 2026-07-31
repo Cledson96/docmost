@@ -127,7 +127,9 @@ export class VerificationNotificationService {
           pageTitle,
           spaceName,
           pageUrl: basePageUrl,
-          expiresAt: new Date(verification.expiresAt).toLocaleDateString(),
+          expiresAt: new Date(verification.expiresAt).toLocaleDateString(
+            'pt-BR',
+          ),
         }),
       );
     }

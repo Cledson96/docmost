@@ -56,7 +56,7 @@ O rodapé (`MailFooter`) troca "© Gobrax Wiki, All Rights Reserved" por uma lin
 
 Tratamento por "você". Frases curtas. Sem "por favor" e sem "clique aqui" — o texto do botão nomeia a ação.
 
-Cada e-mail responde três coisas, nessa ordem: o que aconteceu, o que fazer, e o prazo quando existir. O convite atual diz apenas "You have been invited"; a versão em português diz também o que a wiki é e que o convite expira.
+Cada e-mail responde três coisas, nessa ordem: o que aconteceu, o que fazer, e o prazo quando existir. O convite atual diz apenas "You have been invited"; a versão em português diz também o que a wiki é. Como `workspace_invitations` não tem coluna de expiração, o convite não promete prazo.
 
 Sentence case nos assuntos e botões, nunca Title Case.
 

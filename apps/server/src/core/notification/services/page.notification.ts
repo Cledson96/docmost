@@ -241,7 +241,7 @@ export class PageNotificationService {
         await this.notificationService.queueEmail(
           userId,
           notification.id,
-          `${actor.name} updated ${pageTitle}`,
+          `${actor.name} atualizou ${pageTitle}`,
           PageUpdateEmail({
             userName: eligibleUsers.get(userId) ?? '',
             actorName: actor.name,
@@ -397,7 +397,7 @@ export class PageNotificationService {
     await this.notificationService.queueEmail(
       userId,
       notificationIds[0],
-      `Your digest: ${pageUpdates.length} page ${pageUpdates.length === 1 ? 'update' : 'updates'}`,
+      `Seu resumo: ${pageUpdates.length} ${pageUpdates.length === 1 ? 'atualização' : 'atualizações'} de página`,
       PageUpdateDigestEmail({
         userName: user.name,
         pageUpdates,

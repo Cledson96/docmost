@@ -13,14 +13,14 @@ export const InvitationEmail = ({ inviteLink }: Props) => {
       <Section style={content}>
         <Greeting />
         <Text style={paragraph}>
-          Você foi convidado para a Gobrax Wiki, a base de conhecimento da
+          Você recebeu um convite para a Gobrax Wiki, a base de conhecimento da
           Gobrax.
         </Text>
       </Section>
       <EmailButton href={inviteLink}>Aceitar convite</EmailButton>
       <Section style={content}>
         <Text style={paragraphMuted}>
-          Você recebeu este e-mail porque alguém da equipe te convidou.
+          Você recebeu este e-mail porque alguém da equipe convidou você.
         </Text>
       </Section>
     </MailBody>

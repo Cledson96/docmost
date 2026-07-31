@@ -21,7 +21,7 @@ export const PermissionGrantedEmail = ({
       <Section style={content}>
         <Greeting />
         <Text style={paragraph}>
-          <strong>{actorName}</strong> concedeu acesso de {accessLabel} a{' '}
+          <strong>{actorName}</strong> deu acesso de {accessLabel} a{' '}
           <strong>{pageTitle}</strong>.
         </Text>
       </Section>
