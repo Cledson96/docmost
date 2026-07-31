@@ -1,9 +1,19 @@
-import { button as buttonStyle, container, footer, h1, logo, main } from '../css/styles';
+import {
+  brand,
+  button as buttonStyle,
+  container,
+  fontFamily,
+  footer,
+  logo,
+  main,
+  paragraph,
+} from '../css/styles';
 import {
   Body,
   Container,
   Head,
   Html,
+  Img,
   Row,
   Section,
   Text,
@@ -30,7 +40,28 @@ export function MailBody({ children }: MailBodyProps) {
 export function MailHeader() {
   return (
     <Section style={logo}>
-      {/* <Heading style={h1}>docmost</Heading> */}
+      {/* Logo and wordmark together on purpose: most clients block images on
+          the first mail from an unknown sender, which is exactly the invite
+          case, and the header would otherwise render empty. */}
+      <Img
+        src={`${process.env.APP_URL || ''}/gobrax-wiki-logo.png`}
+        alt="Gobrax Wiki"
+        width="104"
+        height="36"
+        style={{ display: 'block', margin: '0 auto 6px auto' }}
+      />
+      <Text
+        style={{
+          fontFamily,
+          fontSize: '13px',
+          fontWeight: 500,
+          color: brand.black,
+          margin: 0,
+          textAlign: 'center' as const,
+        }}
+      >
+        Gobrax Wiki
+      </Text>
     </Section>
   );
 }
@@ -46,7 +77,7 @@ export function EmailButton({ href, children }: EmailButtonProps) {
       role="presentation"
       cellPadding="0"
       cellSpacing="0"
-      style={{ margin: '0 0 15px 15px' }}
+      style={{ margin: '4px 0 8px 24px' }}
     >
       <tr>
         <td
@@ -63,9 +94,10 @@ export function EmailButton({ href, children }: EmailButtonProps) {
               color: buttonStyle.color,
               fontFamily: buttonStyle.fontFamily,
               fontSize: buttonStyle.fontSize,
+              fontWeight: buttonStyle.fontWeight,
               textDecoration: 'none',
               display: 'inline-block',
-              padding: '8px 16px',
+              padding: buttonStyle.padding,
             }}
           >
             {children}
@@ -80,14 +112,22 @@ export function MailFooter() {
   return (
     <Section style={footer}>
       <Row>
-        <Text style={{ textAlign: 'center', color: '#706a7b' }}>
-          © {new Date().getFullYear()} Gobrax Wiki, All Rights Reserved <br />
+        <Text
+          style={{
+            fontFamily,
+            textAlign: 'center' as const,
+            color: brand.greyText,
+            fontSize: '12px',
+          }}
+        >
+          Gobrax Wiki · base de conhecimento da Gobrax
         </Text>
       </Row>
     </Section>
   );
 }
 
-export function getGreetingName(name?: string): string {
-  return name?.split(' ')[0] || 'there';
+export function Greeting({ name }: { name?: string }) {
+  const first = name?.trim().split(' ')[0];
+  return <Text style={paragraph}>{first ? `Olá, ${first}` : 'Olá'}</Text>;
 }

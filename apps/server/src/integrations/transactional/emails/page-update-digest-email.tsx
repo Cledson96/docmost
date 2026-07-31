@@ -1,7 +1,7 @@
 import { Link, Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, link, paragraph } from '../css/styles';
-import { getGreetingName, MailBody } from '../partials/partials';
+import { Greeting, MailBody } from '../partials/partials';
 
 interface PageUpdate {
   title: string;
@@ -23,9 +23,7 @@ export const PageUpdateDigestEmail = ({
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>
-          Hi {getGreetingName(userName)},
-        </Text>
+        <Greeting name={userName} />
         <Text style={paragraph}>
           There {totalUpdates === 1 ? 'has' : 'have'} been{' '}
           <strong>
