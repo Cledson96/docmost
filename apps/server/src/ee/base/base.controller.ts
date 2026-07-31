@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   HttpCode,
@@ -8,6 +9,7 @@ import {
   Res,
 } from '@nestjs/common';
 import { BaseService } from './base.service';
+import { BaseAccessService } from './base-access.service';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
@@ -38,7 +40,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @Controller('bases')
 export class BaseController {
-  constructor(private readonly baseService: BaseService) {}
+  constructor(
+    private readonly baseService: BaseService,
+    private readonly baseAccess: BaseAccessService,
+  ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post('create')
@@ -47,6 +52,20 @@ export class BaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    if (dto.spaceId) {
+      await this.baseAccess.assertCanCreateInSpace(dto.spaceId, user);
+    } else if (dto.parentPageId) {
+      // The service derives the space from the parent, so the parent is the
+      // thing the user must be allowed to write to.
+      await this.baseAccess.assertCanEditPage(
+        dto.parentPageId,
+        user,
+        workspace.id,
+      );
+    } else {
+      throw new BadRequestException('spaceId or parentPageId is required');
+    }
+
     return this.baseService.createBase(dto, user.id, workspace.id);
   }
 
@@ -54,8 +73,10 @@ export class BaseController {
   @Post('info')
   async getBaseInfo(
     @Body() dto: PageIdDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanViewBase(dto.pageId, user, workspace.id);
     return this.baseService.getBaseInfo(dto.pageId, workspace.id);
   }
 
@@ -63,8 +84,10 @@ export class BaseController {
   @Post('update')
   async updateBase(
     @Body() dto: UpdateBaseDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.updateBase(dto, workspace.id);
   }
 
@@ -72,8 +95,10 @@ export class BaseController {
   @Post('delete')
   async deleteBase(
     @Body() dto: PageIdDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.deleteBase(dto.pageId, workspace.id);
   }
 
@@ -84,6 +109,7 @@ export class BaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditPage(dto.pageId, user, workspace.id);
     return this.baseService.convertPageToBase(dto.pageId, dto.template, user.id, workspace.id);
   }
 
@@ -91,9 +117,11 @@ export class BaseController {
   @Post('export-csv')
   async exportBaseToCsv(
     @Body() dto: PageIdDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
     @Res() res: FastifyReply,
   ) {
+    await this.baseAccess.assertCanViewBase(dto.pageId, user, workspace.id);
     const csvContent = await this.baseService.exportToCsv(dto.pageId, workspace.id);
     const fileName = `export-${dto.pageId}.csv`;
 
@@ -106,8 +134,10 @@ export class BaseController {
   @Post()
   async listBases(
     @Body() dto: SpaceIdDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanViewSpace(dto.spaceId, user);
     return this.baseService.listBases(dto.spaceId, workspace.id);
   }
 
@@ -116,8 +146,10 @@ export class BaseController {
   @Post('properties/create')
   async createProperty(
     @Body() dto: CreatePropertyDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.createProperty(dto, workspace.id);
   }
 
@@ -125,8 +157,10 @@ export class BaseController {
   @Post('properties/update')
   async updateProperty(
     @Body() dto: UpdatePropertyDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.updateProperty(dto, workspace.id);
   }
 
@@ -134,8 +168,10 @@ export class BaseController {
   @Post('properties/delete')
   async deleteProperty(
     @Body() dto: DeletePropertyDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.deleteProperty(dto.propertyId, dto.pageId, workspace.id);
   }
 
@@ -143,8 +179,10 @@ export class BaseController {
   @Post('properties/reorder')
   async reorderProperty(
     @Body() dto: ReorderPropertyDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.reorderProperty(dto.propertyId, dto.pageId, dto.position, workspace.id);
   }
 
@@ -156,6 +194,7 @@ export class BaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.createRow(dto, user.id, workspace.id);
   }
 
@@ -163,8 +202,10 @@ export class BaseController {
   @Post('rows/info')
   async getRowInfo(
     @Body() dto: RowInfoDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanViewBase(dto.pageId, user, workspace.id);
     return this.baseService.getRowInfo(dto.rowId, dto.pageId, workspace.id);
   }
 
@@ -175,6 +216,7 @@ export class BaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.updateRow(dto, user.id, workspace.id);
   }
 
@@ -182,8 +224,10 @@ export class BaseController {
   @Post('rows/delete')
   async deleteRow(
     @Body() dto: DeleteRowDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.deleteRow(dto.rowId, dto.pageId, workspace.id);
   }
 
@@ -191,8 +235,10 @@ export class BaseController {
   @Post('rows/delete-many')
   async deleteRows(
     @Body() dto: DeleteRowsDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.deleteRows(dto.rowIds, dto.pageId, workspace.id);
   }
 
@@ -200,8 +246,10 @@ export class BaseController {
   @Post('rows')
   async listRows(
     @Body() dto: ListRowsDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanViewBase(dto.pageId, user, workspace.id);
     return this.baseService.listRows(dto, workspace.id);
   }
 
@@ -209,8 +257,10 @@ export class BaseController {
   @Post('rows/reorder')
   async reorderRow(
     @Body() dto: ReorderRowDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.reorderRow(dto.rowId, dto.pageId, dto.position, workspace.id);
   }
 
@@ -222,6 +272,7 @@ export class BaseController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.createView(dto, user.id, workspace.id);
   }
 
@@ -229,8 +280,10 @@ export class BaseController {
   @Post('views/update')
   async updateView(
     @Body() dto: UpdateViewDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.updateView(dto, workspace.id);
   }
 
@@ -238,8 +291,10 @@ export class BaseController {
   @Post('views/delete')
   async deleteView(
     @Body() dto: DeleteViewDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanEditBase(dto.pageId, user, workspace.id);
     return this.baseService.deleteView(dto.viewId, dto.pageId, workspace.id);
   }
 
@@ -247,8 +302,10 @@ export class BaseController {
   @Post('views')
   async listViews(
     @Body() dto: PageIdDto,
+    @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
+    await this.baseAccess.assertCanViewBase(dto.pageId, user, workspace.id);
     return this.baseService.listViews(dto.pageId, workspace.id);
   }
 }

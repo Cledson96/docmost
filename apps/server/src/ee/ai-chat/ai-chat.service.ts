@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -17,6 +18,7 @@ import { ContentOperation } from '../../core/page/dto/update-page.dto';
 import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { EmbeddingService } from '../embedding/embedding.service';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import {
   editRefusalNotice,
   languageFromLocale,
@@ -36,6 +38,8 @@ type EditOutcome = {
 
 @Injectable()
 export class AiChatService {
+  private readonly logger = new Logger(AiChatService.name);
+
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly providerFactory: AiProviderFactory,
@@ -45,6 +49,7 @@ export class AiChatService {
     private readonly spaceMemberRepo: SpaceMemberRepo,
     private readonly embeddingService: EmbeddingService,
     private readonly environmentService: EnvironmentService,
+    private readonly pagePermissionRepo: PagePermissionRepo,
   ) {}
 
   async createChat(userId: string, workspaceId: string) {
@@ -301,12 +306,15 @@ export class AiChatService {
     // Build context from mentioned pages
     let contextText = '';
     if (params.mentionedPageIds?.length) {
-      const pages = await this.db
+      const mentioned = await this.db
         .selectFrom('pages')
-        .select(['title', 'content'])
+        .select(['id', 'spaceId', 'title', 'content'])
         .where('id', 'in', params.mentionedPageIds)
         .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
         .execute();
+
+      const pages = await this.filterViewablePages(mentioned, user);
 
       if (pages.length > 0) {
         contextText = pages
@@ -318,13 +326,18 @@ export class AiChatService {
     if (params.contextPageId) {
       const page = await this.db
         .selectFrom('pages')
-        .select(['id', 'title', 'content'])
+        .select(['id', 'spaceId', 'title', 'content'])
         .where('id', '=', params.contextPageId)
         .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
         .executeTakeFirst();
 
-      if (page) {
-        contextText += `\n\n## Current page (ID: ${page.id}, Title: ${page.title}):\n${this.extractTextFromContent(page.content)}`;
+      const [viewable] = page
+        ? await this.filterViewablePages([page], user)
+        : [];
+
+      if (viewable) {
+        contextText += `\n\n## Current page (ID: ${viewable.id}, Title: ${viewable.title}):\n${this.extractTextFromContent(viewable.content)}`;
       }
     }
 
@@ -612,6 +625,7 @@ export class AiChatService {
         const hits = await this.embeddingService.search({
           query: trimmed,
           workspaceId,
+          userId,
           spaceIds,
           limit: RETRIEVAL_LIMIT + exclude.size,
         });
@@ -635,6 +649,7 @@ export class AiChatService {
       const pages = await this.textSearchPages({
         query: trimmed,
         workspaceId,
+        userId,
         spaceIds,
         exclude,
       });
@@ -649,10 +664,11 @@ export class AiChatService {
   private async textSearchPages(opts: {
     query: string;
     workspaceId: string;
+    userId: string;
     spaceIds: string[];
     exclude: Set<string>;
   }): Promise<Array<{ id: string; title: string; excerpt: string }>> {
-    const { query, workspaceId, spaceIds, exclude } = opts;
+    const { query, workspaceId, userId, spaceIds, exclude } = opts;
 
     // Prefix matching on every word, which is what makes short questions match
     // partial titles. Punctuation is stripped so it cannot break to_tsquery.
@@ -684,8 +700,20 @@ export class AiChatService {
       .limit(RETRIEVAL_LIMIT + exclude.size)
       .execute();
 
-    return rows
-      .filter((row) => !exclude.has(row.id))
+    const candidates = rows.filter((row) => !exclude.has(row.id));
+
+    // Full-text search ignores page-level restrictions, same as the semantic
+    // path in EmbeddingService.search. Filter before slicing so a restricted
+    // page does not silently crowd out an accessible one within the limit.
+    const accessible = new Set(
+      await this.pagePermissionRepo.filterAccessiblePageIds({
+        pageIds: candidates.map((row) => row.id),
+        userId,
+      }),
+    );
+
+    return candidates
+      .filter((row) => accessible.has(row.id))
       .slice(0, RETRIEVAL_LIMIT)
       .map((row) => ({
         id: row.id,
@@ -728,6 +756,33 @@ export class AiChatService {
     }
 
     return { allowed: true, page };
+  }
+
+  /**
+   * Mentions and the context page arrive as raw ids from the client. Without
+   * this the model would happily quote a restricted page back to the caller.
+   */
+  private async filterViewablePages<T extends { id: string; spaceId: string }>(
+    pages: T[],
+    user: User,
+  ): Promise<T[]> {
+    const checked = await Promise.all(
+      pages.map(async (page) => {
+        try {
+          await this.pageAccessService.validateCanView(page as Page, user);
+          return page;
+        } catch (err) {
+          if (!(err instanceof ForbiddenException)) {
+            this.logger.warn(
+              `filterViewablePages: unexpected error validating access to page ${page.id}, dropping it from context: ${err instanceof Error ? err.message : err}`,
+            );
+          }
+          return null;
+        }
+      }),
+    );
+
+    return checked.filter((page) => page !== null) as T[];
   }
 
   private buildSystemPrompt(

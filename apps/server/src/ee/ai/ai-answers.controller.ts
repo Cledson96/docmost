@@ -6,7 +6,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserThrottlerGuard } from '../../integrations/throttle/user-throttler.guard';
+import {
+  AUTH_THROTTLER,
+  EXPORT_THROTTLER,
+} from '../../integrations/throttle/throttler-names';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -17,14 +23,19 @@ import { AiProviderFactory } from './ai-provider.factory';
 import { languageFromLocale } from './ai-language.util';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { sql } from 'kysely';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 
-@UseGuards(JwtAuthGuard)
+@SkipThrottle({ [AUTH_THROTTLER]: true, [EXPORT_THROTTLER]: true })
+@UseGuards(JwtAuthGuard, UserThrottlerGuard)
 @Controller('ai')
 export class AiAnswersController {
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly providerFactory: AiProviderFactory,
     private readonly environmentService: EnvironmentService,
+    private readonly spaceMemberRepo: SpaceMemberRepo,
+    private readonly pagePermissionRepo: PagePermissionRepo,
   ) {}
 
   @Post('answers')
@@ -82,6 +93,13 @@ export class AiAnswersController {
         .selectFrom('pages')
         .select(['id', 'title', 'slugId', 'content'])
         .where('workspaceId', '=', workspace.id)
+        // Answers quote page excerpts back to the caller, so the candidate set
+        // has to be the caller's spaces — not the whole workspace.
+        .where(
+          'spaceId',
+          'in',
+          this.spaceMemberRepo.getUserSpaceIdsQuery(user.id),
+        )
         .where('deletedAt', 'is', null)
         .where(
           sql<boolean>`tsv @@ to_tsquery('english', f_unaccent(${searchTerms}))`,
@@ -92,7 +110,21 @@ export class AiAnswersController {
         searchQuery = searchQuery.where('spaceId', '=', body.spaceId);
       }
 
-      const pages = await searchQuery.execute();
+      const candidatePages = await searchQuery.execute();
+
+      // Full-text search ignores page-level restrictions, so a match within a
+      // space the user belongs to can still be a page they are individually
+      // barred from. Drop those before any excerpt or content reaches the
+      // sources list or the model prompt.
+      const accessiblePageIds = new Set(
+        await this.pagePermissionRepo.filterAccessiblePageIds({
+          pageIds: candidatePages.map((page) => page.id),
+          userId: user.id,
+        }),
+      );
+      const pages = candidatePages.filter((page) =>
+        accessiblePageIds.has(page.id),
+      );
 
       // Get space slugs for sources
       const sources = [];

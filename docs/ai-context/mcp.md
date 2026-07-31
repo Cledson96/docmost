@@ -26,6 +26,8 @@
 
 - Operações verificam associação a space, CASL e `PageAccessService` antes de ler ou alterar conteúdo. Páginas de outro workspace são tratadas como não encontradas para não permitir enumeração de IDs.
 - O acesso é limitado às permissões do usuário dono da API key, não a uma permissão especial do MCP. Não ignore verificações de serviço, CASL ou acesso à página ao acrescentar ferramentas.
+- `get_comment` valida acesso à página do comentário antes de devolvê-lo, seguindo o mesmo padrão das demais ferramentas de página.
+- O endpoint MCP tem rate limiting por usuário; não presuma que uma nova ferramenta ou rota fica de fora desse limite.
 - O formato padrão de conteúdo de página é Markdown; `get_page` também aceita HTML ou JSON ProseMirror. Atualizações de página recebem Markdown e usam `append` por padrão.
 - Upload de anexo por MCP aceita no máximo 2 MiB de bytes antes de base64. Exports que geram ZIP, como uma página com filhos ou anexos, não podem ser devolvidos pelo MCP.
 

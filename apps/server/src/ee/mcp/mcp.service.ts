@@ -1529,10 +1529,11 @@ export class McpService {
       }
 
       case 'get_comment': {
-        const { comment } = await this.getCommentInWorkspace(
+        const { comment, page } = await this.getCommentInWorkspace(
           args.commentId,
           workspace,
         );
+        await this.pageAccessService.validateCanView(page, user);
         return comment;
       }
 
@@ -2068,6 +2069,7 @@ export class McpService {
         const { items } = await this.searchAttachmentsService.search(
           args.query,
           workspace.id,
+          user.id,
           args.spaceId,
         );
 
@@ -2382,25 +2384,13 @@ export class McpService {
         const hits = await this.embeddingService.search({
           query: args.query,
           workspaceId: workspace.id,
+          userId: user.id,
           spaceIds,
           limit,
         });
 
-        // Vector distance ignores page-level restrictions, so filter after
-        // ranking exactly as the keyword paths do.
-        const accessible = new Set(
-          await this.pagePermissionRepo.filterAccessiblePageIds({
-            pageIds: hits.map((hit) => hit.pageId),
-            userId: user.id,
-            spaceId: args.spaceId,
-          }),
-        );
-
         const results = hits
-          .filter(
-            (hit) =>
-              accessible.has(hit.pageId) && hit.similarity >= minSimilarity,
-          )
+          .filter((hit) => hit.similarity >= minSimilarity)
           .slice(0, limit);
 
         if (results.length === 0) {
@@ -2924,6 +2914,7 @@ export class McpService {
       const { items } = await this.searchAttachmentsService.search(
         query,
         workspace.id,
+        user.id,
         spaceId,
       );
 

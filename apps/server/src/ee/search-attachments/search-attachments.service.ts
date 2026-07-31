@@ -2,12 +2,21 @@ import { Injectable } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
 import { sql } from 'kysely';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 
 @Injectable()
 export class SearchAttachmentsService {
-  constructor(@InjectKysely() private readonly db: KyselyDB) {}
+  constructor(
+    @InjectKysely() private readonly db: KyselyDB,
+    private readonly spaceMemberRepo: SpaceMemberRepo,
+  ) {}
 
-  async search(queryText: string, workspaceId: string, spaceId?: string) {
+  async search(
+    queryText: string,
+    workspaceId: string,
+    userId: string,
+    spaceId?: string,
+  ) {
     const cleanQuery = queryText.trim();
     if (!cleanQuery) return { items: [] };
 
@@ -34,6 +43,13 @@ export class SearchAttachmentsService {
         'pages.slugId as pageSlugId',
       ])
       .where('attachments.workspaceId', '=', workspaceId)
+      // Attachment rows carry the extracted document text in the highlight, so
+      // this must be scoped to the user's spaces exactly like SearchService.
+      .where(
+        'attachments.spaceId',
+        'in',
+        this.spaceMemberRepo.getUserSpaceIdsQuery(userId),
+      )
       .where('attachments.deletedAt', 'is', null)
       .where(sql<boolean>`attachments.tsv @@ plainto_tsquery('english', ${cleanQuery})`);
 
