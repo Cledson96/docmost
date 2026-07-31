@@ -185,7 +185,7 @@
           ]
         }
       ],
-      "^.+\\.(t|j)s$": "ts-jest"
+      "^.+\\.(t|j)sx?$": "ts-jest"
     },
     "transformIgnorePatterns": [
       "/node_modules/(?!(\\.pnpm/)?(nanoid|uuid|image-dimensions|marked|happy-dom|lib0|y-protocols|yjs|escape-string-regexp|@sindresorhus[+/][a-z-]+)(@|/))"
@@ -197,6 +197,7 @@
     "testEnvironment": "node",
     "moduleNameMapper": {
       "^@docmost/db/(.*)$": "<rootDir>/database/$1",
+      "^@docmost/transactional/emails/(.*)$": "<rootDir>/../test/email-stub.ts",
       "^@docmost/transactional/(.*)$": "<rootDir>/integrations/transactional/$1",
       "^@docmost/ee/(.*)$": "<rootDir>/ee/$1",
       "^src/(.*)$": "<rootDir>/$1",

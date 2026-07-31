@@ -12,7 +12,10 @@ const page = {
   workspaceId: 'workspace-1',
   parentPageId: null,
   deletedAt: null,
-  content: {},
+  // A real page always holds a valid ProseMirror doc. `{}` made get_page's
+  // happy path throw inside jsonToHtml (Node.fromJSON rejects it), which went
+  // unnoticed while this suite could not load at all.
+  content: { type: 'doc', content: [{ type: 'paragraph' }] },
 } as any;
 
 function buildService(overrides: Partial<Record<string, any>> = {}) {
