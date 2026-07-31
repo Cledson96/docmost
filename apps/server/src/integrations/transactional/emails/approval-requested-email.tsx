@@ -1,7 +1,7 @@
 import { Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, paragraph } from '../css/styles';
-import { EmailButton, MailBody } from '../partials/partials';
+import { EmailButton, Greeting, MailBody } from '../partials/partials';
 
 interface Props {
   actorName: string;
@@ -19,14 +19,13 @@ export const ApprovalRequestedEmail = ({
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Greeting />
         <Text style={paragraph}>
-          <strong>{actorName}</strong> submitted{' '}
-          <strong>{pageTitle}</strong> in the{' '}
-          <strong>{spaceName}</strong> space for your approval.
+          <strong>{actorName}</strong> enviou <strong>{pageTitle}</strong>, no
+          espaço <strong>{spaceName}</strong>, para sua aprovação.
         </Text>
       </Section>
-      <EmailButton href={pageUrl}>Review page</EmailButton>
+      <EmailButton href={pageUrl}>Revisar página</EmailButton>
     </MailBody>
   );
 };

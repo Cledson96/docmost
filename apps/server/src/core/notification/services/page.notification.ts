@@ -117,7 +117,7 @@ export class PageNotificationService {
       if (!notification) continue;
 
       const pageUrl = `${basePageUrl}`;
-      const subject = `${actor.name} mentioned you in ${pageTitle}`;
+      const subject = `${actor.name} mencionou você em ${pageTitle}`;
 
       await this.notificationService.queueEmail(
         userId,
@@ -146,7 +146,7 @@ export class PageNotificationService {
     if (!context) return;
 
     const { actor, pageTitle, basePageUrl } = context;
-    const accessLabel = role === 'writer' ? 'edit' : 'view';
+    const accessLabel = role === 'writer' ? 'edição' : 'leitura';
 
     for (const userId of usersWithSpaceAccess) {
       const notification = await this.notificationService.create({
@@ -160,7 +160,7 @@ export class PageNotificationService {
       });
       if (!notification) continue;
 
-      const subject = `${actor.name} gave you ${accessLabel} access to ${pageTitle}`;
+      const subject = `${actor.name} deu acesso de ${accessLabel} a ${pageTitle}`;
 
       await this.notificationService.queueEmail(
         userId,
@@ -241,7 +241,7 @@ export class PageNotificationService {
         await this.notificationService.queueEmail(
           userId,
           notification.id,
-          `${actor.name} updated ${pageTitle}`,
+          `${actor.name} atualizou ${pageTitle}`,
           PageUpdateEmail({
             userName: eligibleUsers.get(userId) ?? '',
             actorName: actor.name,
@@ -397,7 +397,7 @@ export class PageNotificationService {
     await this.notificationService.queueEmail(
       userId,
       notificationIds[0],
-      `Your digest: ${pageUpdates.length} page ${pageUpdates.length === 1 ? 'update' : 'updates'}`,
+      `Seu resumo: ${pageUpdates.length} ${pageUpdates.length === 1 ? 'atualização' : 'atualizações'} de página`,
       PageUpdateDigestEmail({
         userName: user.name,
         pageUpdates,

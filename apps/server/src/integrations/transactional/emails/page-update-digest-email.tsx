@@ -1,7 +1,7 @@
 import { Link, Section, Text } from 'react-email';
 import * as React from 'react';
-import { content, link, paragraph } from '../css/styles';
-import { getGreetingName, MailBody } from '../partials/partials';
+import { brand, content, link, paragraph } from '../css/styles';
+import { Greeting, MailBody } from '../partials/partials';
 
 interface PageUpdate {
   title: string;
@@ -23,15 +23,13 @@ export const PageUpdateDigestEmail = ({
   return (
     <MailBody>
       <Section style={content}>
+        <Greeting name={userName} />
         <Text style={paragraph}>
-          Hi {getGreetingName(userName)},
-        </Text>
-        <Text style={paragraph}>
-          There {totalUpdates === 1 ? 'has' : 'have'} been{' '}
+          Houve{' '}
           <strong>
-            {totalUpdates} update{totalUpdates === 1 ? '' : 's'}
+            {totalUpdates} atualiza{totalUpdates === 1 ? 'ção' : 'ções'}
           </strong>{' '}
-          since your last update.
+          desde o último resumo.
         </Text>
 
         {pageUpdates.map((page, i) => (
@@ -43,7 +41,7 @@ export const PageUpdateDigestEmail = ({
             </Text>
             {page.updatedBy.length > 0 && (
               <Text style={updatedByText}>
-                Edited by {page.updatedBy.join(', ')}
+                Editado por {page.updatedBy.join(', ')}
               </Text>
             )}
           </Section>
@@ -54,7 +52,7 @@ export const PageUpdateDigestEmail = ({
 };
 
 const pageCard = {
-  borderLeft: '3px solid #e8e5ef',
+  borderLeft: `3px solid ${brand.yellow}`,
   paddingLeft: '12px',
   marginBottom: '12px',
 };
@@ -63,14 +61,14 @@ const pageTitle = {
   ...paragraph,
   margin: '0 0 2px 0',
   fontSize: 14,
-  fontWeight: 'bold' as const,
+  fontWeight: 500,
 };
 
 const updatedByText = {
   ...paragraph,
   margin: '0',
   fontSize: 13,
-  color: '#666',
+  color: brand.greyText,
 };
 
 export default PageUpdateDigestEmail;

@@ -1,7 +1,7 @@
 import { Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, paragraph } from '../css/styles';
-import { EmailButton, MailBody } from '../partials/partials';
+import { EmailButton, Greeting, MailBody } from '../partials/partials';
 
 interface Props {
   actorName: string;
@@ -21,11 +21,10 @@ export const ApprovalRejectedEmail = ({
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Greeting />
         <Text style={paragraph}>
-          <strong>{actorName}</strong> returned{' '}
-          <strong>{pageTitle}</strong> in the{' '}
-          <strong>{spaceName}</strong> space for revision.
+          <strong>{actorName}</strong> devolveu <strong>{pageTitle}</strong>, no
+          espaço <strong>{spaceName}</strong>, para revisão.
         </Text>
         {comment && (
           <Text style={{ ...paragraph, fontStyle: 'italic' }}>
@@ -33,7 +32,7 @@ export const ApprovalRejectedEmail = ({
           </Text>
         )}
       </Section>
-      <EmailButton href={pageUrl}>View page</EmailButton>
+      <EmailButton href={pageUrl}>Ver página</EmailButton>
     </MailBody>
   );
 };

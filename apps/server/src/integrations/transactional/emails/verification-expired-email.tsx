@@ -1,7 +1,7 @@
 import { Section, Text } from 'react-email';
 import * as React from 'react';
 import { content, paragraph } from '../css/styles';
-import { EmailButton, MailBody } from '../partials/partials';
+import { EmailButton, Greeting, MailBody } from '../partials/partials';
 
 interface Props {
   pageTitle: string;
@@ -13,14 +13,14 @@ export const VerificationExpiredEmail = ({ pageTitle, spaceName, pageUrl }: Prop
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>Hi there,</Text>
+        <Greeting />
         <Text style={paragraph}>
-          The verification for <strong>{pageTitle}</strong> in the{' '}
-          <strong>{spaceName}</strong> space has expired. Please re-verify the
-          page to confirm it is still accurate.
+          A verificação de <strong>{pageTitle}</strong>, no espaço{' '}
+          <strong>{spaceName}</strong>, expirou. Verifique a página de novo para
+          confirmar que continua correta.
         </Text>
       </Section>
-      <EmailButton href={pageUrl}>Re-verify page</EmailButton>
+      <EmailButton href={pageUrl}>Verificar novamente</EmailButton>
     </MailBody>
   );
 };

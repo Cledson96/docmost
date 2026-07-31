@@ -50,13 +50,13 @@ Stack de fonte: `Montserrat, 'Helvetica Neue', Helvetica, Arial, sans-serif`.
 
 O cabeçalho (`MailHeader`, hoje vazio — o `<Heading>` está comentado em `partials/partials.tsx:34`) recebe o logo com `alt="Gobrax Wiki"`, mais o nome em texto. A redundância é intencional: a maioria dos clientes bloqueia imagem no primeiro e-mail de um remetente desconhecido, que é exatamente o caso do convite.
 
-O rodapé (`MailFooter`) troca "© Gobrax Wiki, All Rights Reserved" por uma linha que explica por que a pessoa recebeu aquele e-mail — no convite, algo como "Gobrax Wiki · você recebeu porque alguém da equipe te convidou". Isso reduz marcação como spam, o que importa porque o remetente é novo e ainda não tem reputação.
+O rodapé (`MailFooter`) troca "© Gobrax Wiki, All Rights Reserved" por uma linha sóbria e sempre verdadeira: "Gobrax Wiki · base de conhecimento da Gobrax". Um rodapé único não consegue explicar por que cada pessoa recebeu cada e-mail, então a explicação específica fica no corpo do convite — "Você recebeu este e-mail porque alguém da equipe convidou você" — que é o caso em que importa: destinatário frio, remetente ainda sem reputação, risco real de marcação como spam.
 
 ## Tom de voz
 
 Tratamento por "você". Frases curtas. Sem "por favor" e sem "clique aqui" — o texto do botão nomeia a ação.
 
-Cada e-mail responde três coisas, nessa ordem: o que aconteceu, o que fazer, e o prazo quando existir. O convite atual diz apenas "You have been invited"; a versão em português diz também o que a wiki é e que o convite expira.
+Cada e-mail responde três coisas, nessa ordem: o que aconteceu, o que fazer, e o prazo quando existir. O convite atual diz apenas "You have been invited"; a versão em português diz também o que a wiki é. Como `workspace_invitations` não tem coluna de expiração, o convite não promete prazo.
 
 Sentence case nos assuntos e botões, nunca Title Case.
 

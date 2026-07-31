@@ -1,7 +1,7 @@
-import { Button, Link, Section, Text } from 'react-email';
+import { Section, Text } from 'react-email';
 import * as React from 'react';
-import { button, content, paragraph } from '../css/styles';
-import { MailBody } from '../partials/partials';
+import { content, paragraph, paragraphMuted } from '../css/styles';
+import { EmailButton, Greeting, MailBody } from '../partials/partials';
 
 interface Props {
   username: string;
@@ -12,16 +12,16 @@ export const ForgotPasswordEmail = ({ username, resetLink }: Props) => {
   return (
     <MailBody>
       <Section style={content}>
-        <Text style={paragraph}>Hi {username},</Text>
+        <Greeting name={username} />
         <Text style={paragraph}>
-          We received a request from you to reset your password.
+          Recebemos um pedido para redefinir sua senha.
         </Text>
-          <Link href={resetLink}> Click here to set a new password</Link>
-        <Text style={paragraph}>
-          This link is valid for 30 minutes.
-        </Text>
-        <Text style={paragraph}>
-          If you did not request a password reset, please ignore this email.
+      </Section>
+      <EmailButton href={resetLink}>Definir nova senha</EmailButton>
+      <Section style={content}>
+        <Text style={paragraphMuted}>
+          O link vale por 30 minutos. Se não foi você que pediu, ignore este
+          e-mail.
         </Text>
       </Section>
     </MailBody>
