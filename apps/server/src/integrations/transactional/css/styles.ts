@@ -1,7 +1,22 @@
-export const fontFamily = 'HelveticaNeue,Helvetica,Arial,sans-serif';
+// Gobrax brand values, read off https://gobrax.com.br: the yellow is the
+// "Quero contratar" CTA fill, the pill radius is that button's, and the grey
+// is the site header. Black on yellow is not a style choice — white on
+// #FFD31C lands around 1.5:1 contrast and is unreadable.
+export const brand = {
+  yellow: '#FFD31C',
+  black: '#141414',
+  greyBg: '#F4F4F4',
+  greyText: '#5F5E5A',
+  border: '#E6E6E6',
+};
+
+// Mail clients rarely load webfonts, so Montserrat is declared for the few
+// that do (mostly Apple Mail) and the stack degrades everywhere else.
+export const fontFamily =
+  "Montserrat, 'Helvetica Neue', Helvetica, Arial, sans-serif";
 
 export const main = {
-  backgroundColor: '#edf2f7',
+  backgroundColor: brand.greyBg,
   fontFamily,
 };
 
@@ -9,41 +24,45 @@ export const container = {
   maxWidth: '580px',
   margin: '10px auto',
   backgroundColor: '#ffffff',
-  borderColor: '#e8e5ef',
-  borderRadius: '2px',
+  borderColor: brand.border,
+  borderRadius: '12px',
   borderWidth: '1px',
-  boxShadow: '0 2px 0 rgba(0, 0, 150, 0.025), 2px 4px 0 rgba(0, 0, 150, 0.015)',
+  borderStyle: 'solid',
+  padding: '4px 0',
 };
 
 export const content = {
-  padding: '5px 20px 10px 20px',
+  padding: '8px 24px 16px 24px',
 };
 
 export const paragraph = {
-  fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
-  color: '#333',
-  lineHeight: 1,
+  fontFamily,
+  color: brand.black,
+  lineHeight: 1.6,
   fontSize: 14,
+  margin: '0 0 10px 0',
+};
+
+export const paragraphMuted = {
+  ...paragraph,
+  color: brand.greyText,
 };
 
 export const h1 = {
-  color: '#333',
-  fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif",
-  fontSize: '24px',
-  fontWeight: 'bold',
+  fontFamily,
+  color: brand.black,
+  fontSize: '20px',
+  fontWeight: 500,
   padding: '0',
 };
 
 export const logo = {
-  display: 'flex',
-  justifyContent: 'center',
-  alingItems: 'center',
-  padding: 4,
+  textAlign: 'center' as const,
+  padding: '14px 0 6px 0',
 };
 
 export const link = {
+  color: brand.black,
   textDecoration: 'underline',
 };
 
@@ -53,14 +72,13 @@ export const footer = {
 };
 
 export const button = {
-  backgroundColor: '#176ae5',
-  borderRadius: '3px',
-  color: '#fff',
-  fontFamily: "'Open Sans', 'Helvetica Neue', Arial",
-  fontSize: '16px',
+  backgroundColor: brand.yellow,
+  borderRadius: '100px',
+  color: brand.black,
+  fontFamily,
+  fontSize: '14px',
+  fontWeight: 500,
   textDecoration: 'none',
   textAlign: 'center' as const,
-  display: 'block',
-  width: '100px',
-  padding: '8px',
+  padding: '11px 22px',
 };
