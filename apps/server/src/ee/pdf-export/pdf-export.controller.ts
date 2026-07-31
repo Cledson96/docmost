@@ -8,7 +8,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { FastifyReply } from 'fastify';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserThrottlerGuard } from '../../integrations/throttle/user-throttler.guard';
+import {
+  AUTH_THROTTLER,
+  AI_CHAT_THROTTLER,
+} from '../../integrations/throttle/throttler-names';
 import { Public } from '../../common/decorators/public.decorator';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
@@ -25,7 +31,8 @@ import { sanitizeFileName } from '../../common/helpers/utils';
 export class PdfExportController {
   constructor(private readonly pdfExportService: PdfExportService) {}
 
-  @UseGuards(JwtAuthGuard)
+  @SkipThrottle({ [AUTH_THROTTLER]: true, [AI_CHAT_THROTTLER]: true })
+  @UseGuards(JwtAuthGuard, UserThrottlerGuard)
   @HttpCode(HttpStatus.OK)
   @Post('page')
   async exportPage(

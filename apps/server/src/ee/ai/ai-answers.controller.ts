@@ -6,7 +6,13 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Response } from 'express';
+import { SkipThrottle } from '@nestjs/throttler';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+import { UserThrottlerGuard } from '../../integrations/throttle/user-throttler.guard';
+import {
+  AUTH_THROTTLER,
+  EXPORT_THROTTLER,
+} from '../../integrations/throttle/throttler-names';
 import { AuthUser } from '../../common/decorators/auth-user.decorator';
 import { AuthWorkspace } from '../../common/decorators/auth-workspace.decorator';
 import { User, Workspace } from '@docmost/db/types/entity.types';
@@ -20,7 +26,8 @@ import { sql } from 'kysely';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 
-@UseGuards(JwtAuthGuard)
+@SkipThrottle({ [AUTH_THROTTLER]: true, [EXPORT_THROTTLER]: true })
+@UseGuards(JwtAuthGuard, UserThrottlerGuard)
 @Controller('ai')
 export class AiAnswersController {
   constructor(
