@@ -165,6 +165,9 @@
       "tsx"
     ],
     "rootDir": "src",
+    "setupFiles": [
+      "<rootDir>/../test/jest-setup.ts"
+    ],
     "testRegex": ".*\\.spec\\.ts$",
     "transform": {
       "happy-dom.+\\.js$": [
@@ -185,7 +188,7 @@
       "^.+\\.(t|j)s$": "ts-jest"
     },
     "transformIgnorePatterns": [
-      "/node_modules/(?!(\\.pnpm/)?(nanoid|uuid|image-dimensions|marked|happy-dom|lib0|y-protocols|yjs|escape-string-regexp|@sindresorhus[+/]slugify)(@|/))"
+      "/node_modules/(?!(\\.pnpm/)?(nanoid|uuid|image-dimensions|marked|happy-dom|lib0|y-protocols|yjs|escape-string-regexp|@sindresorhus[+/][a-z-]+)(@|/))"
     ],
     "collectCoverageFrom": [
       "**/*.(t|j)s"
