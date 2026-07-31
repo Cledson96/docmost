@@ -40,14 +40,16 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Build first: @docmost/editor-ext resolves to its dist/, so any spec
+      # that transitively imports it fails with TS2307 on a clean runner.
+      - name: Build workspace
+        run: pnpm build
+
       - name: Server unit tests
         run: pnpm --filter server test
 
       - name: Client unit tests
         run: pnpm --filter client test
-
-      - name: Build workspace
-        run: pnpm build
 
   build-push:
     name: Build and push image
