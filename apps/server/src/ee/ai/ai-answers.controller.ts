@@ -17,6 +17,7 @@ import { AiProviderFactory } from './ai-provider.factory';
 import { languageFromLocale } from './ai-language.util';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { sql } from 'kysely';
+import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 
 @UseGuards(JwtAuthGuard)
 @Controller('ai')
@@ -25,6 +26,7 @@ export class AiAnswersController {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly providerFactory: AiProviderFactory,
     private readonly environmentService: EnvironmentService,
+    private readonly spaceMemberRepo: SpaceMemberRepo,
   ) {}
 
   @Post('answers')
@@ -82,6 +84,13 @@ export class AiAnswersController {
         .selectFrom('pages')
         .select(['id', 'title', 'slugId', 'content'])
         .where('workspaceId', '=', workspace.id)
+        // Answers quote page excerpts back to the caller, so the candidate set
+        // has to be the caller's spaces — not the whole workspace.
+        .where(
+          'spaceId',
+          'in',
+          this.spaceMemberRepo.getUserSpaceIdsQuery(user.id),
+        )
         .where('deletedAt', 'is', null)
         .where(
           sql<boolean>`tsv @@ to_tsquery('english', f_unaccent(${searchTerms}))`,
