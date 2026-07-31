@@ -17,6 +17,11 @@
 - Não há controller/provider SSO, rota SCIM ou serviço MFA correspondente sob `apps/server/src` neste checkout. Não anuncie essas integrações como operacionais apenas por haver UI e migration.
 - SCIM armazena tokens com hash, IDs externos e grupos externos. A UI limita tokens e documenta precedência de sync de grupos, mas isso não substitui uma implementação de protocolo no server.
 
+## Autorização E Rate Limiting Em IA
+
+- O REST de bases, a busca de anexos, `/ai/answers`, as páginas mencionadas e de contexto do chat de IA e os dois caminhos de recuperação de contexto (busca semântica e o fallback textual) aplicam escopo de space e de página: cada resultado passa por verificação de associação a space e/ou `PageAccessService`/`PagePermissionRepo` antes de alcançar o autor da requisição ou o prompt do modelo. Não trate mais nenhum desses caminhos como retornando dados sem checar permissão do usuário.
+- Os endpoints de IA, MCP e exportação de PDF têm rate limiting por usuário. Ao adicionar um novo endpoint nessas áreas, aplique o mesmo guard de throttling em vez de presumir que ele já está coberto globalmente.
+
 ## Billing E Cloud
 
 - UI de billing cloud usa Stripe e dados de customer/subscription/plan/trial no banco. Criação de workspace cloud cria plano/trial e convites podem enfileirar sincronização de assentos.

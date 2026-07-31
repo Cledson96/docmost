@@ -3,6 +3,7 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
+  Logger,
 } from '@nestjs/common';
 import { InjectKysely } from 'nestjs-kysely';
 import { KyselyDB } from '@docmost/db/types/kysely.types';
@@ -37,6 +38,8 @@ type EditOutcome = {
 
 @Injectable()
 export class AiChatService {
+  private readonly logger = new Logger(AiChatService.name);
+
   constructor(
     @InjectKysely() private readonly db: KyselyDB,
     private readonly providerFactory: AiProviderFactory,
@@ -759,16 +762,21 @@ export class AiChatService {
    * Mentions and the context page arrive as raw ids from the client. Without
    * this the model would happily quote a restricted page back to the caller.
    */
-  private async filterViewablePages<T extends { id: string }>(
+  private async filterViewablePages<T extends { id: string; spaceId: string }>(
     pages: T[],
     user: User,
   ): Promise<T[]> {
     const checked = await Promise.all(
       pages.map(async (page) => {
         try {
-          await this.pageAccessService.validateCanView(page as any, user);
+          await this.pageAccessService.validateCanView(page as Page, user);
           return page;
-        } catch {
+        } catch (err) {
+          if (!(err instanceof ForbiddenException)) {
+            this.logger.warn(
+              `filterViewablePages: unexpected error validating access to page ${page.id}, dropping it from context: ${err instanceof Error ? err.message : err}`,
+            );
+          }
           return null;
         }
       }),

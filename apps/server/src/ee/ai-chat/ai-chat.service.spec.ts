@@ -1,4 +1,10 @@
+jest.mock('ai', () => ({
+  streamText: jest.fn(),
+  generateText: jest.fn(),
+}));
+
 import { ForbiddenException } from '@nestjs/common';
+import { streamText } from 'ai';
 import { AiChatService } from './ai-chat.service';
 import { User } from '@docmost/db/types/entity.types';
 
@@ -314,5 +320,161 @@ describe('AiChatService.textSearchPages permission filtering', () => {
       pageIds: ['page-a'],
       userId: 'user-1',
     });
+  });
+});
+
+describe('AiChatService.sendMessage mentioned-page authorization', () => {
+  const CHAT_ID = 'chat-1';
+  const WORKSPACE_ID = 'workspace-1';
+  const chatUser = { id: 'user-1', locale: 'pt-BR' } as User;
+
+  // A generic Kysely-style chainable query builder: every fluent method
+  // returns itself, and the terminal executor resolves to a fixed value.
+  function makeQuery(result: unknown) {
+    const query: any = {};
+    [
+      'selectAll',
+      'select',
+      'where',
+      'orderBy',
+      'limit',
+      'groupBy',
+      'innerJoin',
+      'values',
+      'returning',
+      'set',
+    ].forEach((fn) => {
+      query[fn] = jest.fn(() => query);
+    });
+    query.execute = jest.fn().mockResolvedValue(result);
+    query.executeTakeFirst = jest.fn().mockResolvedValue(result);
+    query.executeTakeFirstOrThrow = jest.fn().mockResolvedValue(result);
+    return query;
+  }
+
+  function buildSendMessageService(opts: {
+    mentionedPages: Array<{ id: string; spaceId: string; title: string; content: string }>;
+    restrictedPageIds: Set<string>;
+  }) {
+    // Order matters: sendMessage issues selectFrom() in this sequence for the
+    // scenario under test (existing chat, mentioned pages, no context page,
+    // no space membership so retrieval short-circuits before touching the db
+    // again).
+    const selectFromQueue = [
+      makeQuery({
+        id: CHAT_ID,
+        workspaceId: WORKSPACE_ID,
+        creatorId: chatUser.id,
+        title: 'Existing chat', // truthy so autoGenerateTitle is skipped
+        deletedAt: null,
+      }), // chat ownership check
+      makeQuery([
+        { role: 'user', content: 'previous message' },
+        { role: 'assistant', content: 'previous reply' },
+      ]), // conversation history
+      makeQuery(opts.mentionedPages), // mentioned pages lookup
+    ];
+
+    const insertIntoQueue = [
+      makeQuery(undefined), // save user message
+      makeQuery({ id: 'assistant-msg-1' }), // save assistant message
+    ];
+
+    const db = {
+      selectFrom: jest.fn(() => selectFromQueue.shift()),
+      insertInto: jest.fn(() => insertIntoQueue.shift()),
+      updateTable: jest.fn(() => makeQuery(undefined)),
+    };
+
+    const providerFactory = {
+      isConfigured: jest.fn().mockResolvedValue(true),
+      getChatModel: jest.fn().mockResolvedValue('fake-model'),
+      getCompletionModel: jest.fn().mockResolvedValue('fake-model'),
+    };
+
+    const pageAccessService = {
+      validateCanView: jest.fn(async (page: { id: string }) => {
+        if (opts.restrictedPageIds.has(page.id)) {
+          throw new ForbiddenException();
+        }
+      }),
+    };
+
+    const spaceMemberRepo = {
+      // Empty membership makes retrieveWikiContext return immediately
+      // without issuing further db/embedding calls, keeping this test
+      // focused on the mentioned-pages path.
+      getUserSpaceIds: jest.fn().mockResolvedValue([]),
+    };
+
+    const environmentService = {
+      getAppName: jest.fn().mockReturnValue('Gobrax Wiki'),
+    };
+
+    const service = new AiChatService(
+      db as any,
+      providerFactory as any,
+      {} as any, // pageService
+      {} as any, // pageRepo
+      pageAccessService as any,
+      spaceMemberRepo as any,
+      {} as any, // embeddingService (unreached: no space membership)
+      environmentService as any,
+      {} as any, // pagePermissionRepo (unreached: retrieval short-circuits)
+    );
+
+    return { service, db };
+  }
+
+  async function drain(service: AiChatService, params: any) {
+    const events: unknown[] = [];
+    for await (const event of service.sendMessage(
+      params,
+      chatUser,
+      WORKSPACE_ID,
+    )) {
+      events.push(event);
+    }
+    return events;
+  }
+
+  it('keeps a restricted mentioned page out of the prompt sent to the model', async () => {
+    const accessiblePage = {
+      id: 'page-a',
+      spaceId: 'space-1',
+      title: 'Alpha Doc',
+      content: 'ALPHA_ACCESSIBLE_CONTENT',
+    };
+    const restrictedPage = {
+      id: 'page-b',
+      spaceId: 'space-2',
+      title: 'Beta Doc',
+      content: 'BETA_RESTRICTED_CONTENT',
+    };
+
+    const { service } = buildSendMessageService({
+      mentionedPages: [accessiblePage, restrictedPage],
+      restrictedPageIds: new Set(['page-b']),
+    });
+
+    (streamText as jest.Mock).mockReturnValue({
+      fullStream: (async function* () {})(),
+    });
+
+    await drain(service, {
+      chatId: CHAT_ID,
+      content: 'What do the mentioned docs say?',
+      mentionedPageIds: ['page-a', 'page-b'],
+    });
+
+    expect(streamText).toHaveBeenCalledTimes(1);
+    const call = (streamText as jest.Mock).mock.calls[0][0];
+
+    // The system prompt is where mentioned-page content is injected. If the
+    // call-site filtering in sendMessage were removed (i.e. the raw db rows
+    // were used instead of filterViewablePages(mentioned, user)), the
+    // restricted page's content would leak in here.
+    expect(call.system).toContain('ALPHA_ACCESSIBLE_CONTENT');
+    expect(call.system).not.toContain('BETA_RESTRICTED_CONTENT');
   });
 });
