@@ -301,12 +301,15 @@ export class AiChatService {
     // Build context from mentioned pages
     let contextText = '';
     if (params.mentionedPageIds?.length) {
-      const pages = await this.db
+      const mentioned = await this.db
         .selectFrom('pages')
-        .select(['title', 'content'])
+        .select(['id', 'spaceId', 'title', 'content'])
         .where('id', 'in', params.mentionedPageIds)
         .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
         .execute();
+
+      const pages = await this.filterViewablePages(mentioned, user);
 
       if (pages.length > 0) {
         contextText = pages
@@ -318,13 +321,18 @@ export class AiChatService {
     if (params.contextPageId) {
       const page = await this.db
         .selectFrom('pages')
-        .select(['id', 'title', 'content'])
+        .select(['id', 'spaceId', 'title', 'content'])
         .where('id', '=', params.contextPageId)
         .where('workspaceId', '=', workspaceId)
+        .where('deletedAt', 'is', null)
         .executeTakeFirst();
 
-      if (page) {
-        contextText += `\n\n## Current page (ID: ${page.id}, Title: ${page.title}):\n${this.extractTextFromContent(page.content)}`;
+      const [viewable] = page
+        ? await this.filterViewablePages([page], user)
+        : [];
+
+      if (viewable) {
+        contextText += `\n\n## Current page (ID: ${viewable.id}, Title: ${viewable.title}):\n${this.extractTextFromContent(viewable.content)}`;
       }
     }
 
@@ -728,6 +736,28 @@ export class AiChatService {
     }
 
     return { allowed: true, page };
+  }
+
+  /**
+   * Mentions and the context page arrive as raw ids from the client. Without
+   * this the model would happily quote a restricted page back to the caller.
+   */
+  private async filterViewablePages<T extends { id: string }>(
+    pages: T[],
+    user: User,
+  ): Promise<T[]> {
+    const checked = await Promise.all(
+      pages.map(async (page) => {
+        try {
+          await this.pageAccessService.validateCanView(page as any, user);
+          return page;
+        } catch {
+          return null;
+        }
+      }),
+    );
+
+    return checked.filter((page) => page !== null) as T[];
   }
 
   private buildSystemPrompt(
