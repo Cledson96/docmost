@@ -27,4 +27,8 @@ O workflow publica `ghcr.io/cledson96/docmost:<SHA>` e a VPS apenas faz pull des
 
 Antes do primeiro deploy, crie um registro DNS A para `wiki.cledson.com.br` apontando para `167.86.117.142` e libere as portas TCP 80, 443 e 22 no firewall da VPS. O nginx publica o app em loopback e o Certbot configura HTTPS após o DNS estar propagado.
 
-Para rollback, execute novamente o workflow usando um commit anterior ou publique novamente a tag SHA anterior no mesmo environment.
+## Rede de segurança do deploy
+
+- Antes de subir a nova imagem (cujo boot aplica migrations pendentes), o script gera um dump `pre-deploy-<stamp>.sql.gz` em `<DEPLOY_PATH>/backups`. Se o dump falhar, o deploy é abortado antes de qualquer migration. Os 5 dumps pré-deploy mais recentes são mantidos.
+- Se o healthcheck da nova imagem falhar, o script tenta voltar automaticamente à imagem que estava rodando antes e ainda encerra com erro, para o workflow acusar a falha.
+- Para rollback manual, execute novamente o workflow usando um commit anterior ou publique novamente a tag SHA anterior no mesmo environment. Rollback reverte o código, não o schema; para reverter dados, restaure o dump pré-deploy correspondente.

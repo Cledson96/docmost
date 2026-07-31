@@ -133,13 +133,86 @@ healthcheck() {
   local attempt=1
   until curl --fail --silent --show-error "http://127.0.0.1:${APP_PORT}/api/health/live" >/dev/null; do
     if [ "${attempt}" -ge "${HEALTHCHECK_ATTEMPTS}" ]; then
-      log "healthcheck falhou"
-      compose logs --tail=100 docmost || true
+      return 1
+    fi
+    sleep "${HEALTHCHECK_SLEEP_SECONDS}"
+    attempt=$((attempt + 1))
+  done
+}
+
+current_web_image() {
+  local container_id
+  container_id="$(compose ps -q docmost 2>/dev/null | head -n 1 || true)"
+  [ -n "${container_id}" ] || return 0
+  sudo_run docker inspect --format '{{.Config.Image}}' "${container_id}" 2>/dev/null || true
+}
+
+# One-shot dump before the new image boots, because production startup applies
+# pending migrations. A destructive migration without this dump could cost up
+# to BACKUP_INTERVAL_SECONDS (default 24h) of data.
+backup_before_migration() {
+  local db_container
+  db_container="$(compose ps -aq db 2>/dev/null | head -n 1 || true)"
+  if [ -z "${db_container}" ]; then
+    log "banco ainda não existe; pulando dump pré-deploy"
+    return 0
+  fi
+
+  # O container pode existir parado (ex.: reboot do host). Suba só o banco e
+  # espere ficar saudável antes do dump; sem banco saudável não há migration segura.
+  compose up -d db
+  local attempt=1
+  until compose exec -T db pg_isready -U docmost -d docmost >/dev/null 2>&1; do
+    if [ "${attempt}" -ge "${HEALTHCHECK_ATTEMPTS}" ]; then
+      log "banco não ficou saudável para o dump pré-deploy; abortando"
       exit 1
     fi
     sleep "${HEALTHCHECK_SLEEP_SECONDS}"
     attempt=$((attempt + 1))
   done
+
+  local stamp final partial
+  stamp="$(date -u +%Y%m%dT%H%M%SZ)"
+  final="${DEPLOY_PATH}/backups/pre-deploy-${stamp}.sql.gz"
+  partial="${DEPLOY_PATH}/backups/.pre-deploy-${stamp}.sql.gz.partial"
+  sudo_run mkdir -p "${DEPLOY_PATH}/backups"
+
+  log "gerando dump pré-deploy em ${final}"
+  # pipefail garante que uma falha do pg_dump não seja mascarada pelo gzip.
+  if compose exec -T db pg_dump --format=plain --no-owner --no-privileges \
+       -U docmost -d docmost | gzip -9 | sudo_run tee "${partial}" >/dev/null; then
+    sudo_run mv "${partial}" "${final}"
+    log "dump pré-deploy concluído"
+  else
+    sudo_run rm -f "${partial}"
+    log "dump pré-deploy falhou; abortando o deploy antes de aplicar migrations"
+    exit 1
+  fi
+
+  # Mantém apenas os 5 dumps pré-deploy mais recentes; o db-backup cuida da
+  # retenção dos dumps periódicos.
+  sudo_run find "${DEPLOY_PATH}/backups" -maxdepth 1 -name 'pre-deploy-*.sql.gz' -type f \
+    | sort -r | tail -n +6 | while IFS= read -r old_dump; do
+      sudo_run rm -f "${old_dump}"
+    done
+}
+
+rollback_to_previous_image() {
+  if [ -z "${PREVIOUS_IMAGE}" ] || [ "${PREVIOUS_IMAGE}" = "${WEB_IMAGE}" ]; then
+    log "sem imagem anterior distinta; não há para onde reverter"
+    return 1
+  fi
+  log "revertendo para a imagem anterior ${PREVIOUS_IMAGE}"
+  (
+    WEB_IMAGE="${PREVIOUS_IMAGE}"
+    compose up -d --remove-orphans docmost
+  )
+  if healthcheck; then
+    log "rollback concluído; aplicação saudável com ${PREVIOUS_IMAGE}"
+    return 0
+  fi
+  log "rollback também falhou o healthcheck"
+  return 1
 }
 
 sudo_run mkdir -p "${DEPLOY_PATH}"
@@ -159,12 +232,21 @@ else
 fi
 log "baixando imagens"
 compose pull
+PREVIOUS_IMAGE="$(current_web_image)"
+log "gerando backup pré-migration"
+backup_before_migration
 log "subindo serviços"
 compose up -d --remove-orphans
 log "publicando nginx"
 publish_nginx
 log "validando aplicação"
-healthcheck
+if ! healthcheck; then
+  log "healthcheck falhou"
+  compose logs --tail=100 docmost || true
+  rollback_to_previous_image || true
+  log "deploy de ${WEB_IMAGE} falhou; verifique os logs acima. Dump pré-deploy disponível em ${DEPLOY_PATH}/backups"
+  exit 1
+fi
 log "configurando TLS"
 issue_certificate_if_needed
 sudo_run systemctl enable --now certbot.timer 2>/dev/null || true
