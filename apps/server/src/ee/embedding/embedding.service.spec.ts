@@ -1,0 +1,78 @@
+import { EmbeddingService } from './embedding.service';
+
+describe('EmbeddingService.search', () => {
+  it('drops hits the user cannot read', async () => {
+    const rows = [
+      {
+        pageId: 'page-a',
+        chunkIndex: 0,
+        chunkStart: 0,
+        chunkLength: 10,
+        title: 'A',
+        slugId: 'a',
+        spaceId: 'space-1',
+        textContent: 'alpha text',
+        similarity: 0.9,
+      },
+      {
+        pageId: 'page-b',
+        chunkIndex: 0,
+        chunkStart: 0,
+        chunkLength: 10,
+        title: 'B',
+        slugId: 'b',
+        spaceId: 'space-1',
+        textContent: 'beta text',
+        similarity: 0.8,
+      },
+    ];
+
+    const query: any = {
+      innerJoin: jest.fn(() => query),
+      select: jest.fn(() => query),
+      where: jest.fn(() => query),
+      orderBy: jest.fn(() => query),
+      limit: jest.fn(() => query),
+      execute: jest.fn().mockResolvedValue(rows),
+    };
+
+    const service = Object.create(EmbeddingService.prototype) as any;
+    service.db = { selectFrom: jest.fn(() => query) };
+    service.pagePermissionRepo = {
+      filterAccessiblePageIds: jest.fn().mockResolvedValue(['page-a']),
+    };
+    service.embeddingModel = jest.fn().mockResolvedValue({});
+    service.providerOptions = jest.fn().mockResolvedValue({});
+    service.embedQuery = jest.fn().mockResolvedValue([0.1, 0.2]);
+
+    const results = await service.search({
+      query: 'alpha',
+      workspaceId: 'workspace-1',
+      userId: 'user-1',
+      spaceIds: ['space-1'],
+      limit: 5,
+    });
+
+    expect(results.map((r: any) => r.pageId)).toEqual(['page-a']);
+    expect(
+      service.pagePermissionRepo.filterAccessiblePageIds,
+    ).toHaveBeenCalledWith({
+      pageIds: ['page-a', 'page-b'],
+      userId: 'user-1',
+    });
+  });
+
+  it('returns nothing when the user has no spaces', async () => {
+    const service = Object.create(EmbeddingService.prototype) as any;
+
+    await expect(
+      service.search({
+        query: 'x',
+        workspaceId: 'workspace-1',
+        userId: 'user-1',
+        spaceIds: [],
+        limit: 5,
+      }),
+    ).resolves.toEqual([]);
+  });
+});

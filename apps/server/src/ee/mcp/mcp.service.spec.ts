@@ -524,13 +524,11 @@ describe('McpService permissions', () => {
   it('search_semantic drops hits below the similarity floor', async () => {
     const { service, deps } = buildService();
     deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
+    // embeddingService.search already applies page-level permissions
+    // internally, so the tool only has the similarity floor left to enforce.
     deps.embeddingService.search.mockResolvedValue([
       { pageId: 'page-1', title: 'Perto', similarity: 0.81, excerpt: 'a' },
       { pageId: 'page-2', title: 'Longe', similarity: 0.05, excerpt: 'b' },
-    ]);
-    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue([
-      'page-1',
-      'page-2',
     ]);
 
     const res: any = await callTool(service, 'search_semantic', {
@@ -542,17 +540,20 @@ describe('McpService permissions', () => {
     expect(results[0].pageId).toBe('page-1');
   });
 
-  it('search_semantic still applies page-level restrictions after ranking', async () => {
+  it('search_semantic passes the caller through to the embedding search', async () => {
     const { service, deps } = buildService();
     deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
+    // Page-level restrictions are enforced inside embeddingService.search
+    // itself now, so a restricted page never reaches the tool as a hit.
     deps.embeddingService.search.mockResolvedValue([
       { pageId: 'page-1', title: 'Livre', similarity: 0.9, excerpt: 'a' },
-      { pageId: 'page-secreta', title: 'Restrita', similarity: 0.95, excerpt: 'b' },
     ]);
-    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue(['page-1']);
 
     const res: any = await callTool(service, 'search_semantic', { query: 'x' });
 
+    expect(deps.embeddingService.search).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: user.id }),
+    );
     const results = JSON.parse(res.result.content[0].text).results;
     expect(results.map((r: any) => r.pageId)).toEqual(['page-1']);
   });
@@ -560,7 +561,7 @@ describe('McpService permissions', () => {
   it('search_semantic says so when nothing has been embedded yet', async () => {
     const { service, deps } = buildService();
     deps.spaceMemberRepo.getUserSpaceIds.mockResolvedValue(['space-1']);
-    deps.pagePermissionRepo.filterAccessiblePageIds.mockResolvedValue([]);
+    deps.embeddingService.search.mockResolvedValue([]);
 
     const res: any = await callTool(service, 'search_semantic', { query: 'x' });
 

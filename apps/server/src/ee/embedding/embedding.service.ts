@@ -6,6 +6,7 @@ import { embed, embedMany } from 'ai';
 import { createOpenAI } from '@ai-sdk/openai';
 import { EnvironmentService } from '../../integrations/environment/environment.service';
 import { AiSettingsService } from '../ai/ai-settings.service';
+import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { chunkText } from './chunk-text';
 
 /** Must match the dimension pinned by the page_embeddings migration. */
@@ -27,6 +28,7 @@ export class EmbeddingService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly environmentService: EnvironmentService,
     private readonly aiSettingsService: AiSettingsService,
+    private readonly pagePermissionRepo: PagePermissionRepo,
   ) {}
 
   /**
@@ -160,6 +162,18 @@ export class EmbeddingService {
       .execute();
   }
 
+  private async embedQuery(
+    query: string,
+    workspaceId: string,
+  ): Promise<number[]> {
+    const { embedding } = await embed({
+      model: await this.embeddingModel(workspaceId),
+      value: query,
+      providerOptions: await this.providerOptions(workspaceId),
+    });
+    return embedding;
+  }
+
   /**
    * Nearest chunks by cosine distance, restricted to the given spaces.
    * Returns one row per page — the best-scoring chunk — so the caller is not
@@ -168,19 +182,15 @@ export class EmbeddingService {
   async search(opts: {
     query: string;
     workspaceId: string;
+    userId: string;
     spaceIds: string[];
     limit: number;
   }) {
-    const { query, workspaceId, spaceIds, limit } = opts;
+    const { query, workspaceId, userId, spaceIds, limit } = opts;
 
     if (spaceIds.length === 0) return [];
 
-    const { embedding } = await embed({
-      model: await this.embeddingModel(workspaceId),
-      value: query,
-      providerOptions: await this.providerOptions(workspaceId),
-    });
-
+    const embedding = await this.embedQuery(query, workspaceId);
     const vector = sql`${JSON.stringify(embedding)}::vector`;
 
     const rows = await this.db
@@ -213,17 +223,30 @@ export class EmbeddingService {
       if (!bestPerPage.has(row.pageId)) bestPerPage.set(row.pageId, row);
     }
 
-    return [...bestPerPage.values()].map((row) => ({
-      pageId: row.pageId,
-      slugId: row.slugId,
-      title: row.title,
-      spaceId: row.spaceId,
-      similarity: Number(row.similarity.toFixed(4)),
-      excerpt: (row.textContent || '')
-        .slice(row.chunkStart, row.chunkStart + row.chunkLength)
-        .trim()
-        .slice(0, 400),
-    }));
+    const candidates = [...bestPerPage.values()];
+
+    // Vector distance ignores page-level restrictions. Filtering here rather
+    // than at each call site is deliberate: the AI chat used to skip it.
+    const accessible = new Set(
+      await this.pagePermissionRepo.filterAccessiblePageIds({
+        pageIds: candidates.map((row) => row.pageId),
+        userId,
+      }),
+    );
+
+    return candidates
+      .filter((row) => accessible.has(row.pageId))
+      .map((row) => ({
+        pageId: row.pageId,
+        slugId: row.slugId,
+        title: row.title,
+        spaceId: row.spaceId,
+        similarity: Number(row.similarity.toFixed(4)),
+        excerpt: (row.textContent || '')
+          .slice(row.chunkStart, row.chunkStart + row.chunkLength)
+          .trim()
+          .slice(0, 400),
+      }));
   }
 
   /** Pages in the workspace that have no embeddings yet. */

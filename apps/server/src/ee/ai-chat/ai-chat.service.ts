@@ -620,6 +620,7 @@ export class AiChatService {
         const hits = await this.embeddingService.search({
           query: trimmed,
           workspaceId,
+          userId,
           spaceIds,
           limit: RETRIEVAL_LIMIT + exclude.size,
         });
