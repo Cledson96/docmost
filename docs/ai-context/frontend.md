@@ -3,7 +3,7 @@
 ## Inicialização E Rotas
 
 - `apps/client/src/main.tsx` é a entrada. Ele instala `BrowserRouter`, Mantine, modais, notificações, React Query, Helmet, PostHog e i18n antes de renderizar `App`.
-- `apps/client/src/App.tsx` é o mapa de rotas. Páginas ficam em `src/pages`; layouts globais e de compartilhamento agrupam rotas privadas e públicas.
+- `apps/client/src/App.tsx` é o mapa de rotas. Páginas ficam em `src/pages`; layouts globais e de compartilhamento agrupam rotas privadas e públicas. As páginas de rota usam `React.lazy` com uma única fronteira compartilhada de `Suspense`; layouts e a infraestrutura de roteamento permanecem eager.
 - O alias `@/` aponta para `apps/client/src` em TypeScript, Vite e Vitest. Use-o para imports dentro do app, seguindo os caminhos já adotados pela área modificada.
 
 ## Organização Por Feature
