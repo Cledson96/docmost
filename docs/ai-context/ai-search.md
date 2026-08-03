@@ -3,6 +3,7 @@
 ## Busca De Conteúdo
 
 - `SearchModule` oferece busca textual de páginas dentro de spaces acessíveis e aplica restrições de página quando recebe usuário/workspace. O recurso principal está em `apps/server/src/core/search`.
+- Para filtros de busca aplicados antes da paginação, `PagePermissionRepo.userCanAccessPagePredicate` em `apps/server/src/database/repos/page/page-permission.repo.ts` produz um predicado SQL que exige permissão direta ou por grupo em todos os ancestrais restritos.
 - O MCP também expõe busca textual, semântica e ampla; o contrato de ferramentas e suas regras estão em `mcp.md`, não em uma API REST separada.
 - Busca de anexos é um módulo EE e depende da indexação de arquivos. Alterações em anexos devem avaliar também `SearchAttachmentsModule`.
 
