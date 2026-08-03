@@ -1,7 +1,9 @@
 import { randomUUID } from 'node:crypto';
+import * as dotenv from 'dotenv';
 import { CamelCasePlugin, Kysely, Transaction } from 'kysely';
 import { PostgresJSDialect } from 'kysely-postgres-js';
 import * as postgres from 'postgres';
+import { envPath, normalizePostgresUrl } from '../src/common/helpers/utils';
 import { SearchService } from '../src/core/search/search.service';
 import { PagePermissionRepo } from '../src/database/repos/page/page-permission.repo';
 import { PageRepo } from '../src/database/repos/page/page.repo';
@@ -10,10 +12,13 @@ import { DbInterface } from '../src/database/types/db.interface';
 type Fixture = {
   workspaceId: string;
   spaceId: string;
+  secondarySpaceId: string;
   userId: string;
 };
 
 const rollback = new Error('rollback search permission fixture');
+
+dotenv.config({ path: envPath });
 
 describe('SearchService PostgreSQL page permission pagination', () => {
   let db: Kysely<DbInterface>;
@@ -25,7 +30,9 @@ describe('SearchService PostgreSQL page permission pagination', () => {
 
     db = new Kysely<DbInterface>({
       dialect: new PostgresJSDialect({
-        postgres: postgres(process.env.DATABASE_URL, { max: 1 }),
+        postgres: postgres(normalizePostgresUrl(process.env.DATABASE_URL), {
+          max: 1,
+        }),
       }),
       plugins: [new CamelCasePlugin()],
     });
@@ -53,6 +60,7 @@ describe('SearchService PostgreSQL page permission pagination', () => {
     const workspaceId = randomUUID();
     const userId = randomUUID();
     const spaceId = randomUUID();
+    const secondarySpaceId = randomUUID();
     const token = randomUUID();
 
     await trx
@@ -81,8 +89,26 @@ describe('SearchService PostgreSQL page permission pagination', () => {
       .insertInto('spaceMembers')
       .values({ id: randomUUID(), userId, spaceId, role: 'writer' })
       .execute();
+    await trx
+      .insertInto('spaces')
+      .values({
+        id: secondarySpaceId,
+        name: 'Secondary Search Space',
+        slug: `secondary-search-${token}`,
+        workspaceId,
+      })
+      .execute();
+    await trx
+      .insertInto('spaceMembers')
+      .values({
+        id: randomUUID(),
+        userId,
+        spaceId: secondarySpaceId,
+        role: 'writer',
+      })
+      .execute();
 
-    return { workspaceId, spaceId, userId };
+    return { workspaceId, spaceId, secondarySpaceId, userId };
   }
 
   function createService(trx: Transaction<DbInterface>, fixture: Fixture) {
@@ -90,7 +116,9 @@ describe('SearchService PostgreSQL page permission pagination', () => {
       trx as any,
       Object.create(PageRepo.prototype) as PageRepo,
       {} as any,
-      { getUserSpaceIds: async () => [fixture.spaceId] } as any,
+      {
+        getUserSpaceIds: async () => [fixture.spaceId, fixture.secondarySpaceId],
+      } as any,
       Object.create(PagePermissionRepo.prototype) as PagePermissionRepo,
     );
   }
@@ -100,6 +128,7 @@ describe('SearchService PostgreSQL page permission pagination', () => {
     fixture: Fixture,
     title: string,
     parentPageId?: string,
+    spaceId = fixture.spaceId,
   ) {
     const id = randomUUID();
     await trx
@@ -111,7 +140,7 @@ describe('SearchService PostgreSQL page permission pagination', () => {
         textContent: title,
         parentPageId: parentPageId ?? null,
         creatorId: fixture.userId,
-        spaceId: fixture.spaceId,
+        spaceId,
         workspaceId: fixture.workspaceId,
       })
       .execute();
@@ -250,18 +279,29 @@ describe('SearchService PostgreSQL page permission pagination', () => {
     });
   });
 
-  it('does not let an inaccessible high-ranked page displace an accessible suggestion', async () => {
+  it('does not let an inaccessible page in the current space displace a suggestion', async () => {
     await withFixture(async (trx, fixture) => {
       const inaccessible = await createPage(
         trx,
         fixture,
-        'runbook runbook runbook runbook runbook',
+        'runbook denied current space',
       );
       await restrictPage(trx, fixture, inaccessible);
-      const accessible = await createPage(trx, fixture, 'runbook');
+      const accessible = await createPage(
+        trx,
+        fixture,
+        'runbook accessible secondary space',
+        undefined,
+        fixture.secondarySpaceId,
+      );
 
       const result = await createService(trx, fixture).searchSuggestions(
-        { query: 'runbook', includePages: true, limit: 1 },
+        {
+          query: 'runbook',
+          includePages: true,
+          spaceId: fixture.spaceId,
+          limit: 1,
+        },
         fixture.userId,
         fixture.workspaceId,
       );
