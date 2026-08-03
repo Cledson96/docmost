@@ -9,7 +9,7 @@
 ## Login, Sessões E API Keys
 
 - `JwtStrategy` aceita cookie HTTP-only `authToken` ou bearer token. O JWT precisa conter o mesmo workspace resolvido pelo domínio, um usuário ativo e, para acesso normal, uma sessão ainda ativa.
-- Login cria `user_sessions`, assina JWT com a sessão e grava o cookie. Logout revoga a sessão atual e remove o cookie. Revogar sessões, trocar senha ou redefinir senha também desconecta imediatamente os sockets Socket.IO dessas sessões; a sessão atual é preservada ao encerrar as demais. O usuário pode listar/revogar sessões, mas não revogar a sessão atual pelo endpoint de revogação.
+- Login cria `user_sessions`, assina JWT com a sessão e grava o cookie. Logout revoga a sessão atual e remove o cookie. Revogar sessões, trocar senha ou redefinir senha também desconecta imediatamente os sockets Socket.IO dos IDs retornados pela mutação de banco; a sessão atual é preservada ao encerrar as demais. O usuário pode listar/revogar sessões, mas não revogar a sessão atual pelo endpoint de revogação.
 - API keys são JWTs gerados por `ApiKeyService`, vinculados a usuário e workspace. Sua validação verifica chave ativa, dono, usuário não desabilitado e workspace; use as permissões do dono, nunca uma permissão especial da chave.
 - A implementação está em `apps/server/src/core/auth/`, `core/session/` e `core/api-key/`; telas de login ficam em `apps/client/src/pages/auth/` e recursos de conta em `src/features/user` e `src/features/session`.
 

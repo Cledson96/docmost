@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { Server, Socket } from 'socket.io';
@@ -20,6 +20,7 @@ type PreparedTreeRefresh = {
 @Injectable()
 export class WsService {
   private server: Server;
+  private readonly logger = new Logger(WsService.name);
 
   constructor(
     private readonly pagePermissionRepo: PagePermissionRepo,
@@ -31,12 +32,31 @@ export class WsService {
   }
 
   async disconnectSession(sessionId: string): Promise<void> {
-    if (!this.server) return;
+    await this.disconnectSessions([sessionId]);
+  }
 
-    const sockets = await this.server.fetchSockets();
+  async disconnectSessions(sessionIds: Iterable<string>): Promise<void> {
+    const sessionIdSet = new Set(sessionIds);
+    if (!this.server || sessionIdSet.size === 0) return;
+
+    let sockets: Awaited<ReturnType<Server['fetchSockets']>>;
+    try {
+      sockets = await this.server.fetchSockets();
+    } catch (err) {
+      this.logger.warn('Failed to fetch sockets for session disconnection', err);
+      return;
+    }
+
     for (const socket of sockets) {
-      if (socket.data.sessionId === sessionId) {
+      if (!sessionIdSet.has(socket.data.sessionId as string)) continue;
+
+      try {
         socket.disconnect();
+      } catch (err) {
+        this.logger.warn(
+          `Failed to disconnect socket ${socket.id} for an invalidated session`,
+          err,
+        );
       }
     }
   }

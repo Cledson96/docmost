@@ -88,8 +88,12 @@ export class SessionService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    await this.userSessionRepo.revokeById(sessionId, userId, workspaceId);
-    await this.wsService.disconnectSession(sessionId);
+    const sessionIds = await this.userSessionRepo.revokeById(
+      sessionId,
+      userId,
+      workspaceId,
+    );
+    await this.wsService.disconnectSessions(sessionIds);
   }
 
   async revokeAllOtherSessions(
@@ -97,22 +101,12 @@ export class SessionService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    const sessions = await this.userSessionRepo.findActiveByUser(
-      userId,
-      workspaceId,
-    );
-
-    await this.userSessionRepo.revokeAllExceptCurrent(
+    const sessionIds = await this.userSessionRepo.revokeAllExceptCurrent(
       currentSessionId,
       userId,
       workspaceId,
     );
-
-    await Promise.all(
-      sessions
-        .filter((session) => session.id !== currentSessionId)
-        .map((session) => this.wsService.disconnectSession(session.id)),
-    );
+    await this.wsService.disconnectSessions(sessionIds);
   }
 
   async deleteAllOtherSessions(
@@ -120,35 +114,20 @@ export class SessionService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    const sessions = await this.userSessionRepo.findActiveByUser(
-      userId,
-      workspaceId,
-    );
-
-    await this.userSessionRepo.deleteAllExceptCurrent(
+    const sessionIds = await this.userSessionRepo.deleteAllExceptCurrent(
       currentSessionId,
       userId,
       workspaceId,
     );
-
-    await Promise.all(
-      sessions
-        .filter((session) => session.id !== currentSessionId)
-        .map((session) => this.wsService.disconnectSession(session.id)),
-    );
+    await this.wsService.disconnectSessions(sessionIds);
   }
 
   async deleteAllSessions(userId: string, workspaceId: string): Promise<void> {
-    const sessions = await this.userSessionRepo.findActiveByUser(
+    const sessionIds = await this.userSessionRepo.deleteByUserId(
       userId,
       workspaceId,
     );
-
-    await this.userSessionRepo.deleteByUserId(userId, workspaceId);
-
-    await Promise.all(
-      sessions.map((session) => this.wsService.disconnectSession(session.id)),
-    );
+    await this.wsService.disconnectSessions(sessionIds);
   }
 
   private parseDeviceName(userAgent: string | null): string | null {
