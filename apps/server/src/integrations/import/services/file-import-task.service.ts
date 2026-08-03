@@ -108,6 +108,7 @@ export class FileImportTaskService {
 
     try {
       let refreshPageId: string | null = null;
+      let confluenceRefreshWarning: string | null = null;
       if (
         fileTask.source === FileImportSource.Generic ||
         fileTask.source === FileImportSource.Notion
@@ -135,19 +136,44 @@ export class FileImportTaskService {
         );
 
         // The EE importer returns the deterministic ID of one page it created
-        // for this file task. A missing ID deliberately suppresses the refresh
-        // rather than risking a refresh derived from another import.
+        // for this file task. `fileTask.pageId` is an equivalent persisted
+        // reference when the importer records it there.
         const confluenceRefreshPageId =
           await confluenceImportService.processConfluenceImport({
             extractDir: tmpExtractDir,
             fileTask,
           });
-        if (typeof confluenceRefreshPageId === 'string') {
-          refreshPageId = confluenceRefreshPageId;
+        const candidatePageId =
+          typeof confluenceRefreshPageId === 'string'
+            ? confluenceRefreshPageId
+            : fileTask.pageId;
+
+        if (candidatePageId) {
+          const importedPage = await this.db
+            .selectFrom('pages')
+            .select('id')
+            .where('id', '=', candidatePageId)
+            .where('spaceId', '=', fileTask.spaceId)
+            .where('workspaceId', '=', fileTask.workspaceId)
+            .where('deletedAt', 'is', null)
+            .executeTakeFirst();
+
+          if (importedPage) {
+            refreshPageId = importedPage.id;
+          } else {
+            confluenceRefreshWarning =
+              `Confluence import ${fileTask.id} completed without a valid page reference`;
+          }
+        } else {
+          confluenceRefreshWarning =
+            `Confluence import ${fileTask.id} completed without a page reference`;
         }
       }
       try {
         await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
+        if (confluenceRefreshWarning) {
+          this.logger.warn(confluenceRefreshWarning);
+        }
         if (refreshPageId) {
           await this.wsService.emitTreeRefresh(
             fileTask.spaceId,
