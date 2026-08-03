@@ -23,6 +23,16 @@ vi.mock("@/features/workspace/queries/workspace-query.ts", () => ({
   }),
 }));
 vi.mock("@/ee/components/sso-login.tsx", () => ({ default: () => null }));
+vi.mock("@/main.tsx", async () => {
+  const { QueryClient } = await import("@tanstack/react-query");
+
+  return { queryClient: new QueryClient() };
+});
+vi.mock("@/main", async () => {
+  const { QueryClient } = await import("@tanstack/react-query");
+
+  return { queryClient: new QueryClient() };
+});
 vi.mock("react-i18next", async (importOriginal) => {
   const actual = await importOriginal<typeof import("react-i18next")>();
 
