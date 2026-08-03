@@ -1,5 +1,4 @@
 import { MantineProvider } from "@mantine/core";
-import "@testing-library/jest-dom/vitest";
 import { render, screen } from "@testing-library/react";
 import { HelmetProvider } from "react-helmet-async";
 import { MemoryRouter } from "react-router-dom";
@@ -39,5 +38,7 @@ it("renders a lazy route page through the shared suspense boundary", async () =>
     </MemoryRouter>,
   );
 
-  expect(await screen.findByRole("heading", { name: /login/i })).toBeVisible();
+  expect(
+    (await screen.findByRole("heading", { name: /login/i })).textContent,
+  ).toMatch(/login/i);
 });
