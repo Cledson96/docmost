@@ -5,6 +5,9 @@ function buildQuery(rows: unknown[] = []) {
   ['select', 'where', 'orderBy', 'limit', 'offset'].forEach((method) => {
     query[method] = jest.fn(() => query);
   });
+  query.$if = jest.fn((condition, callback) =>
+    condition ? callback(query) : query,
+  );
   query.execute = jest.fn().mockResolvedValue(rows);
   return query;
 }
