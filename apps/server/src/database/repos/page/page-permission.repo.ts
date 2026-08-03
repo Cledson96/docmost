@@ -384,9 +384,9 @@ export class PagePermissionRepo {
     return sql<SqlBool>`
       NOT EXISTS (
         WITH RECURSIVE ancestors AS (
-          SELECT id AS ancestor_id, parent_page_id
-          FROM pages
-          WHERE id = ${sql.ref(pageId)}
+          SELECT candidate.id AS ancestor_id, candidate.parent_page_id
+          FROM pages AS candidate
+          WHERE candidate.id = ${sql.ref(pageId)}
           UNION ALL
           SELECT p.id, p.parent_page_id
           FROM pages p
