@@ -11,7 +11,7 @@ import {
   PagePermission,
 } from '@docmost/db/types/entity.types';
 import { PaginationOptions } from '@docmost/db/pagination/pagination-options';
-import { ExpressionBuilder, sql, SqlBool } from 'kysely';
+import { ExpressionBuilder, RawBuilder, sql, SqlBool } from 'kysely';
 import { GroupRepo } from '@docmost/db/repos/group/group.repo';
 import { DB } from '@docmost/db/types/db';
 import {
@@ -371,6 +371,42 @@ export class PagePermissionRepo {
   async canUserAccessPage(userId: string, pageId: string): Promise<boolean> {
     const { canAccess } = await this.canUserEditPage(userId, pageId);
     return canAccess;
+  }
+
+  /**
+   * Builds a query-time predicate that permits pages only when the user has
+   * permission on every restricted page in the candidate's ancestry.
+   */
+  userCanAccessPagePredicate(
+    userId: string,
+    pageId: string,
+  ): RawBuilder<SqlBool> {
+    return sql<SqlBool>`
+      NOT EXISTS (
+        WITH RECURSIVE ancestors AS (
+          SELECT candidate.id AS ancestor_id, candidate.parent_page_id
+          FROM pages AS candidate
+          WHERE candidate.id = ${sql.ref(pageId)}
+          UNION ALL
+          SELECT p.id, p.parent_page_id
+          FROM pages p
+          JOIN ancestors a ON a.parent_page_id = p.id
+        )
+        SELECT 1
+        FROM ancestors a
+        JOIN page_access pa ON pa.page_id = a.ancestor_id
+        LEFT JOIN page_permissions pp ON pp.page_access_id = pa.id
+          AND (
+            pp.user_id = ${userId}::uuid
+            OR pp.group_id IN (
+              SELECT gu.group_id
+              FROM group_users gu
+              WHERE gu.user_id = ${userId}::uuid
+            )
+          )
+        WHERE pp.id IS NULL
+      )
+    `;
   }
 
   /**
