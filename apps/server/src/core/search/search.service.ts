@@ -62,10 +62,7 @@ export class SearchService {
       .$if(Boolean(searchParams.creatorId), (qb) =>
         qb.where('creatorId', '=', searchParams.creatorId),
       )
-      .where('deletedAt', 'is', null)
-      .orderBy('rank', 'desc')
-      .limit(searchParams.limit || 25)
-      .offset(searchParams.offset || 0);
+      .where('deletedAt', 'is', null);
 
     if (!searchParams.shareId) {
       queryResults = queryResults.select((eb) => this.pageRepo.withSpace(eb));
@@ -122,21 +119,19 @@ export class SearchService {
       return { items: [] };
     }
 
-    //@ts-ignore
-    let results: any[] = await queryResults.execute();
-
-    // Filter results by page-level permissions (if user is authenticated)
-    if (opts.userId && results.length > 0) {
-      const pageIds = results.map((r: any) => r.id);
-      const accessibleIds =
-        await this.pagePermissionRepo.filterAccessiblePageIds({
-          pageIds,
-          userId: opts.userId,
-          spaceId: searchParams.spaceId,
-        });
-      const accessibleSet = new Set(accessibleIds);
-      results = results.filter((r: any) => accessibleSet.has(r.id));
+    if (opts.userId) {
+      queryResults = queryResults.where(
+        this.pagePermissionRepo.userCanAccessPagePredicate(opts.userId, 'pages.id'),
+      );
     }
+
+    queryResults = queryResults
+      .orderBy('rank', 'desc')
+      .limit(searchParams.limit || 25)
+      .offset(searchParams.offset || 0);
+
+    //@ts-ignore
+    const results: any[] = await queryResults.execute();
 
     //@ts-ignore
     const searchResults = results.map((result: SearchResponseDto) => {
@@ -213,14 +208,17 @@ export class SearchService {
           ),
         )
         .where('deletedAt', 'is', null)
-        .where('workspaceId', '=', workspaceId)
-        .limit(limit);
+        .where('workspaceId', '=', workspaceId);
 
       // search all spaces the user has access to, prioritizing the current space
       const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(userId);
 
       if (userSpaceIds?.length > 0) {
-        pageSearch = pageSearch.where('spaceId', 'in', userSpaceIds);
+        pageSearch = pageSearch
+          .where('spaceId', 'in', userSpaceIds)
+          .where(
+            this.pagePermissionRepo.userCanAccessPagePredicate(userId, 'pages.id'),
+          );
 
         if (suggestion?.spaceId) {
           pageSearch = pageSearch.orderBy(
@@ -229,19 +227,7 @@ export class SearchService {
           );
         }
 
-        pages = await pageSearch.execute();
-      }
-
-      // Filter by page-level permissions
-      if (pages.length > 0) {
-        const pageIds = pages.map((p) => p.id);
-        const accessibleIds =
-          await this.pagePermissionRepo.filterAccessiblePageIds({
-            pageIds,
-            userId,
-          });
-        const accessibleSet = new Set(accessibleIds);
-        pages = pages.filter((p) => accessibleSet.has(p.id));
+        pages = await pageSearch.limit(limit).execute();
       }
     }
 

@@ -5,6 +5,7 @@
 - `SearchModule` oferece busca textual de páginas dentro de spaces acessíveis e aplica restrições de página quando recebe usuário/workspace. O recurso principal está em `apps/server/src/core/search`.
 - Os DTOs de busca restringem `limit` a inteiros de 1–100 e `offset` a inteiros a partir de 0; sugestões restringem `limit` a inteiros de 1–25 em `apps/server/src/core/search/dto/search.dto.ts`.
 - Para filtros de busca aplicados antes da paginação, `PagePermissionRepo.userCanAccessPagePredicate` em `apps/server/src/database/repos/page/page-permission.repo.ts` produz um predicado SQL que exige permissão direta ou por grupo em todos os ancestrais restritos.
+- A busca textual PostgreSQL e as sugestões de páginas aplicam o acesso de página na consulta antes da paginação ou dos limites; os resultados principais têm limite máximo de 100 e as sugestões, de 25.
 - O MCP também expõe busca textual, semântica e ampla; o contrato de ferramentas e suas regras estão em `mcp.md`, não em uma API REST separada.
 - Busca de anexos é um módulo EE e depende da indexação de arquivos. Alterações em anexos devem avaliar também `SearchAttachmentsModule`.
 
