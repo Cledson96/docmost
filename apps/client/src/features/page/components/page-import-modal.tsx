@@ -36,7 +36,6 @@ import { Feature } from "@/ee/features";
 import { useUpgradeLabel } from "@/ee/hooks/use-upgrade-label";
 import { getFileTaskById } from "@/features/file-task/services/file-task-service.ts";
 import { queryClient } from "@/main.tsx";
-import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import bytes from "bytes";
 
 interface PageImportModalProps {
@@ -86,7 +85,6 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
   const { t } = useTranslation();
   const [treeData, setTreeData] = useAtom(treeDataAtom);
   const [fileTaskId, setFileTaskId] = useState<string | null>(null);
-  const emit = useQueryEmit();
 
   const markdownFileRef = useRef<() => void>(null);
   const htmlFileRef = useRef<() => void>(null);
@@ -196,12 +194,6 @@ function ImportFormatSelection({ spaceId, onClose }: ImportFormatSelection) {
             queryKey: ["recent-changes", fileTask.spaceId],
           });
 
-          setTimeout(() => {
-            emit({
-              operation: "refetchRootTreeNodeEvent",
-              spaceId: spaceId,
-            });
-          }, 50);
         }
 
         if (status === "failed") {

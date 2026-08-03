@@ -25,7 +25,6 @@ import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom.ts";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import { SpaceTreeNode } from "@/features/page/tree/types.ts";
 import { IPage } from "@/features/page/types/page.types.ts";
-import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 export function useGetTemplatesQuery(params?: { spaceId?: string }) {
   const { spaceId } = params ?? {};
@@ -160,7 +159,6 @@ export function useUseTemplateMutation() {
   const { t } = useTranslation();
   const [, setTreeData] = useAtom(treeDataAtom);
   const store = useStore();
-  const emit = useQueryEmit();
 
   return useMutation<
     IPage,
@@ -204,17 +202,6 @@ export function useUseTemplateMutation() {
         treeModel.insert(prev, parentId, newNode, lastIndex),
       );
 
-      setTimeout(() => {
-        emit({
-          operation: "addTreeNode",
-          spaceId: page.spaceId,
-          payload: {
-            parentId,
-            index: lastIndex,
-            data: newNode,
-          },
-        });
-      }, 50);
     },
     onError: (error) => {
       const errorMessage = error["response"]?.data?.message;

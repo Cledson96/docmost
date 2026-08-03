@@ -142,6 +142,11 @@ export const useTreeSocket = () => {
             return next;
           });
           break;
+        case "refetchRootTreeNodeEvent":
+          setTreeData((prev) =>
+            prev.filter((node) => node.spaceId !== event.spaceId),
+          );
+          break;
       }
     });
   }, [socket]);

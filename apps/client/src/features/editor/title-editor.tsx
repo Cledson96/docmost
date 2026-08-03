@@ -17,13 +17,11 @@ import {
 } from "@/features/page/queries/page-query";
 import { useDebouncedCallback, getHotkeyHandler } from "@mantine/hooks";
 import { useAtom } from "jotai";
-import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import { History } from "@tiptap/extension-history";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import EmojiCommand from "@/features/editor/extensions/emoji-command.ts";
-import { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter.ts";
 import { PageEditMode } from "@/features/user/types/user.types.ts";
 import { searchSpotlight } from "@/features/search/constants.ts";
@@ -51,7 +49,6 @@ export function TitleEditor({
     useUpdateTitlePageMutation();
   const pageEditor = useAtomValue(pageEditorAtom);
   const [, setTitleEditor] = useAtom(titleEditorAtom);
-  const emit = useQueryEmit();
   const navigate = useNavigate();
   const [activePageId, setActivePageId] = useState(pageId);
   const currentPageEditMode = useAtomValue(currentPageEditModeAtom);
@@ -135,10 +132,7 @@ export function TitleEditor({
       pageId: pageId,
       title: titleEditor.getText(),
     }).then((page) => {
-      const event: UpdateEvent = {
-        operation: "updateOne",
-        spaceId: page.spaceId,
-        entity: ["pages"],
+      const localUpdate = {
         id: page.id,
         payload: {
           title: page.title,
@@ -152,8 +146,7 @@ export function TitleEditor({
 
       updatePageData(page);
 
-      localEmitter.emit("message", event);
-      emit(event);
+      localEmitter.emit("message", localUpdate);
     });
   }, [pageId, title, titleEditor]);
 

@@ -6,19 +6,15 @@ import {
   useUpdateTitlePageMutation,
   updatePageData,
 } from "@/features/page/queries/page-query";
-import { useQueryEmit } from "@/features/websocket/use-query-emit";
-import { UpdateEvent } from "@/features/websocket/types";
 import localEmitter from "@/lib/local-emitter";
 import classes from "@/ee/base/styles/grid.module.css";
 
-// Editable base name for the inline embed. Follows the TitleEditor convention
-// (updatePageData + localEmitter + websocket emit) so the sidebar and other
-// clients stay in sync. Standalone pages use the page TitleEditor instead.
+// Editable base name for the inline embed. Local cache and tree updates mirror
+// the page TitleEditor; the server broadcasts refreshes to other clients.
 export function BaseEmbedTitle({ pageId }: { pageId: string }) {
   const { t } = useTranslation();
   const { data: page } = usePageQuery({ pageId });
   const { mutateAsync: updateTitleAsync } = useUpdateTitlePageMutation();
-  const emit = useQueryEmit();
   const [value, setValue] = useState("");
   const focusedRef = useRef(false);
 
@@ -32,10 +28,7 @@ export function BaseEmbedTitle({ pageId }: { pageId: string }) {
     if (!page || trimmed === (page.title ?? "")) return;
     updateTitleAsync({ pageId, title: trimmed }).then((updated) => {
       if (updated.title !== trimmed) return;
-      const event: UpdateEvent = {
-        operation: "updateOne",
-        spaceId: updated.spaceId,
-        entity: ["pages"],
+      const localUpdate = {
         id: updated.id,
         payload: {
           title: updated.title,
@@ -45,10 +38,9 @@ export function BaseEmbedTitle({ pageId }: { pageId: string }) {
         },
       };
       updatePageData(updated);
-      localEmitter.emit("message", event);
-      emit(event);
+      localEmitter.emit("message", localUpdate);
     });
-  }, [value, page, pageId, updateTitleAsync, emit]);
+  }, [value, page, pageId, updateTitleAsync]);
 
   const debouncedCommit = useDebouncedCallback(commit, 500);
 
