@@ -1,7 +1,9 @@
 import {
   IsBoolean,
+  IsInt,
   IsNotEmpty,
-  IsNumber,
+  Max,
+  Min,
   IsOptional,
   IsString,
   IsUUID,
@@ -25,11 +27,14 @@ export class SearchDTO {
   creatorId?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(100)
   limit?: number;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(0)
   offset?: number;
 }
 
@@ -64,6 +69,8 @@ export class SearchSuggestionDTO {
   spaceId?: string;
 
   @IsOptional()
-  @IsNumber()
+  @IsInt()
+  @Min(1)
+  @Max(25)
   limit?: number;
 }
