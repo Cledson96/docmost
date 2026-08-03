@@ -40,20 +40,30 @@ describe('WsGateway', () => {
       }),
     };
     const spaceMemberRepo = { getUserSpaceIds: jest.fn().mockResolvedValue([]) };
+    const wsService = {
+      setServer: jest.fn(),
+      isTreeEvent: jest.fn(),
+      handleTreeEvent: jest.fn(),
+    };
+    const baseRealtime = {
+      setServer: jest.fn(),
+      isBaseEvent: jest.fn(),
+      handleInbound: jest.fn(),
+    };
     const gateway = new WsGateway(
       tokenService as any,
       { findActiveById: jest.fn().mockResolvedValue(session) } as any,
       spaceMemberRepo as any,
-      { setServer: jest.fn(), isTreeEvent: jest.fn() } as any,
-      { setServer: jest.fn() } as any,
+      wsService as any,
+      baseRealtime as any,
     );
 
-    return gateway;
+    return { gateway, wsService, baseRealtime };
   }
 
   it('disconnects a client whose valid token has no active session', async () => {
     const client = createClient();
-    const gateway = createGateway(undefined);
+    const { gateway } = createGateway(undefined);
 
     await gateway.handleConnection(client);
 
@@ -63,7 +73,7 @@ describe('WsGateway', () => {
 
   it('disconnects a client whose valid token resolves to a revoked session', async () => {
     const client = createClient();
-    const gateway = createGateway({
+    const { gateway } = createGateway({
       ...activeSession,
       revokedAt: new Date(),
     });
@@ -76,11 +86,28 @@ describe('WsGateway', () => {
 
   it('stores the active session id and joins rooms for a valid session', async () => {
     const client = createClient();
-    const gateway = createGateway(activeSession);
+    const { gateway } = createGateway(activeSession);
 
     await gateway.handleConnection(client);
 
     expect(client.data.sessionId).toBe('session-1');
     expect(client.join).toHaveBeenCalledWith(['user-user-1', 'workspace-workspace-1']);
+  });
+
+  it('does not broadcast client-originated tree events', async () => {
+    const client = createClient();
+    const { gateway, wsService, baseRealtime } = createGateway(activeSession);
+    const data = {
+      operation: 'deleteTreeNode',
+      spaceId: 'space-1',
+      payload: { id: 'page-1' },
+    };
+
+    wsService.isTreeEvent.mockReturnValue(true);
+    baseRealtime.isBaseEvent.mockReturnValue(false);
+
+    await gateway.handleMessage(client, data);
+
+    expect(wsService.handleTreeEvent).not.toHaveBeenCalled();
   });
 });

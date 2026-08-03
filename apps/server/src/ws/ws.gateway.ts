@@ -94,10 +94,6 @@ export class WsGateway
 
   @SubscribeMessage('message')
   async handleMessage(client: Socket, data: any): Promise<void> {
-    if (this.wsService.isTreeEvent(data)) {
-      await this.wsService.handleTreeEvent(client, data);
-      return;
-    }
     if (this.baseRealtime.isBaseEvent(data)) {
       await this.baseRealtime.handleInbound(client, data);
       return;
