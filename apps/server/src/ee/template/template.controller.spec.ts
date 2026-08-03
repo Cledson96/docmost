@@ -22,6 +22,7 @@ describe('TemplateController', () => {
   const user = { id: 'user-id' } as User;
   const workspace = { id: 'workspace-id' } as Workspace;
   let service: jest.Mocked<TemplateService>;
+  const wsService = { emitTreeRefresh: jest.fn() };
   let controller: TemplateController;
 
   beforeEach(() => {
@@ -31,9 +32,9 @@ describe('TemplateController', () => {
       createTemplate: jest.fn(),
       updateTemplate: jest.fn(),
       deleteTemplate: jest.fn(),
-      useTemplate: jest.fn(),
+      useTemplate: jest.fn().mockResolvedValue({ spaceId: 'space-id' }),
     } as unknown as jest.Mocked<TemplateService>;
-    controller = new TemplateController(service);
+    controller = new TemplateController(service, wsService as any);
   });
 
   describe('route metadata', () => {

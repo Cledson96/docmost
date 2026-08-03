@@ -52,6 +52,7 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
+import { WsService } from '../../ws/ws.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('pages')
@@ -64,6 +65,7 @@ export class PageController {
     private readonly pageAccessService: PageAccessService,
     private readonly backlinkService: BacklinkService,
     private readonly labelService: LabelService,
+    private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -233,6 +235,7 @@ export class PageController {
       workspace.id,
       createPageDto,
     );
+    this.wsService.emitTreeRefresh(page.spaceId);
 
     const { canEdit, hasRestriction } =
       await this.pageAccessService.validateCanViewWithPermissions(page, user);
@@ -286,6 +289,7 @@ export class PageController {
       updatePageDto,
       user,
     );
+    this.wsService.emitTreeRefresh(updatedPage.spaceId);
 
     const permissions = { canEdit: true, hasRestriction };
 
@@ -351,6 +355,7 @@ export class PageController {
         user.id,
         workspace.id,
       );
+      this.wsService.emitTreeRefresh(page.spaceId);
 
       this.auditService.log({
         event: AuditEvent.PAGE_TRASHED,
@@ -392,6 +397,7 @@ export class PageController {
     await this.pageAccessService.validateCanEdit(page, user);
 
     await this.pageRepo.restorePage(pageIdDto.pageId, workspace.id);
+    this.wsService.emitTreeRefresh(page.spaceId);
 
     this.auditService.log({
       event: AuditEvent.PAGE_RESTORED,
@@ -603,6 +609,8 @@ export class PageController {
       dto.spaceId,
       user.id,
     );
+    this.wsService.emitTreeRefresh(movedPage.spaceId);
+    this.wsService.emitTreeRefresh(dto.spaceId);
 
     this.auditService.log({
       event: AuditEvent.PAGE_MOVED_TO_SPACE,
@@ -701,6 +709,7 @@ export class PageController {
       });
     }
 
+    this.wsService.emitTreeRefresh(result.spaceId);
     return result;
   }
 
@@ -733,7 +742,9 @@ export class PageController {
       await this.pageAccessService.validateCanEdit(targetParent, user);
     }
 
-    return this.pageService.movePage(dto, movedPage);
+    const result = await this.pageService.movePage(dto, movedPage);
+    this.wsService.emitTreeRefresh(movedPage.spaceId);
+    return result;
   }
 
   @HttpCode(HttpStatus.OK)

@@ -18,11 +18,15 @@ import {
   UseTemplateDto,
 } from './dto/template.dto';
 import { TemplateService } from './template.service';
+import { WsService } from '../../ws/ws.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('templates')
 export class TemplateController {
-  constructor(private readonly templateService: TemplateService) {}
+  constructor(
+    private readonly templateService: TemplateService,
+    private readonly wsService: WsService,
+  ) {}
 
   @HttpCode(HttpStatus.OK)
   @Post()
@@ -81,6 +85,8 @@ export class TemplateController {
     @AuthUser() user: User,
     @AuthWorkspace() workspace: Workspace,
   ) {
-    return this.templateService.useTemplate(dto, user, workspace);
+    const page = await this.templateService.useTemplate(dto, user, workspace);
+    this.wsService.emitTreeRefresh(page.spaceId);
+    return page;
   }
 }

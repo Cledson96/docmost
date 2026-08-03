@@ -42,6 +42,7 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../../integrations/audit/audit.service';
+import { WsService } from '../../../ws/ws.service';
 
 @Injectable()
 export class FileImportTaskService {
@@ -56,6 +57,7 @@ export class FileImportTaskService {
     private readonly importAttachmentService: ImportAttachmentService,
     private moduleRef: ModuleRef,
     private eventEmitter: EventEmitter2,
+    private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -138,6 +140,7 @@ export class FileImportTaskService {
       }
       try {
         await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
+        this.wsService.emitTreeRefresh(fileTask.spaceId);
         await cleanupTmpFile();
         await cleanupTmpDir();
         // delete stored file on success

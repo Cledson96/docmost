@@ -24,6 +24,13 @@ export class WsService {
     this.server = server;
   }
 
+  emitTreeRefresh(spaceId: string): void {
+    this.server.to(getSpaceRoomName(spaceId)).emit('message', {
+      operation: 'refetchRootTreeNodeEvent',
+      spaceId,
+    });
+  }
+
   async handleTreeEvent(client: Socket, data: any): Promise<void> {
     const room = getSpaceRoomName(data.spaceId);
 

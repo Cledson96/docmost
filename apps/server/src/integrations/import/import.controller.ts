@@ -30,6 +30,7 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../integrations/audit/audit.service';
+import { WsService } from '../../ws/ws.service';
 
 @Controller()
 export class ImportController {
@@ -39,6 +40,7 @@ export class ImportController {
     private readonly importService: ImportService,
     private readonly spaceAbility: SpaceAbilityFactory,
     private readonly environmentService: EnvironmentService,
+    private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -96,6 +98,9 @@ export class ImportController {
       spaceId,
       workspace.id,
     );
+    if (createdPage) {
+      this.wsService.emitTreeRefresh(spaceId);
+    }
 
     const ext = path.extname(file.filename).toLowerCase();
     const sourceMap: Record<string, string> = {
