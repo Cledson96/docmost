@@ -118,7 +118,7 @@ export class BaseController {
       user.id,
       workspace.id,
     );
-    this.wsService.emitTreeRefresh(base.spaceId);
+    await this.wsService.emitTreeRefresh(base.spaceId, base.id);
     return base;
   }
 

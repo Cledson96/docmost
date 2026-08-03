@@ -235,7 +235,7 @@ export class PageController {
       workspace.id,
       createPageDto,
     );
-    this.wsService.emitTreeRefresh(page.spaceId);
+    await this.wsService.emitTreeRefresh(page.spaceId, page.id);
 
     const { canEdit, hasRestriction } =
       await this.pageAccessService.validateCanViewWithPermissions(page, user);
@@ -289,7 +289,7 @@ export class PageController {
       updatePageDto,
       user,
     );
-    this.wsService.emitTreeRefresh(updatedPage.spaceId);
+    await this.wsService.emitTreeRefresh(updatedPage.spaceId, updatedPage.id);
 
     const permissions = { canEdit: true, hasRestriction };
 
@@ -330,7 +330,12 @@ export class PageController {
           'Only space admins can permanently delete pages',
         );
       }
+      const treeRefresh = await this.wsService.prepareTreeRefresh(
+        page.spaceId,
+        page.id,
+      );
       await this.pageService.forceDelete(deletePageDto.pageId, workspace.id);
+      this.wsService.publishPreparedTreeRefresh(treeRefresh);
 
       this.auditService.log({
         event: AuditEvent.PAGE_DELETED,
@@ -350,12 +355,16 @@ export class PageController {
       // User with edit permission can delete
       await this.pageAccessService.validateCanEdit(page, user);
 
+      const treeRefresh = await this.wsService.prepareTreeRefresh(
+        page.spaceId,
+        page.id,
+      );
       await this.pageService.removePage(
         deletePageDto.pageId,
         user.id,
         workspace.id,
       );
-      this.wsService.emitTreeRefresh(page.spaceId);
+      this.wsService.publishPreparedTreeRefresh(treeRefresh);
 
       this.auditService.log({
         event: AuditEvent.PAGE_TRASHED,
@@ -397,7 +406,7 @@ export class PageController {
     await this.pageAccessService.validateCanEdit(page, user);
 
     await this.pageRepo.restorePage(pageIdDto.pageId, workspace.id);
-    this.wsService.emitTreeRefresh(page.spaceId);
+    await this.wsService.emitTreeRefresh(page.spaceId, page.id);
 
     this.auditService.log({
       event: AuditEvent.PAGE_RESTORED,
@@ -604,13 +613,17 @@ export class PageController {
     await this.pageAccessService.validateCanEdit(movedPage, user);
 
     // Moves only accessible pages; inaccessible child pages become root pages in original space
+    const sourceTreeRefresh = await this.wsService.prepareTreeRefresh(
+      movedPage.spaceId,
+      movedPage.id,
+    );
     const { childPageIds } = await this.pageService.movePageToSpace(
       movedPage,
       dto.spaceId,
       user.id,
     );
-    this.wsService.emitTreeRefresh(movedPage.spaceId);
-    this.wsService.emitTreeRefresh(dto.spaceId);
+    this.wsService.publishPreparedTreeRefresh(sourceTreeRefresh);
+    await this.wsService.emitTreeRefresh(dto.spaceId, movedPage.id);
 
     this.auditService.log({
       event: AuditEvent.PAGE_MOVED_TO_SPACE,
@@ -709,7 +722,7 @@ export class PageController {
       });
     }
 
-    this.wsService.emitTreeRefresh(result.spaceId);
+    await this.wsService.emitTreeRefresh(result.spaceId, result.id);
     return result;
   }
 
@@ -743,7 +756,7 @@ export class PageController {
     }
 
     const result = await this.pageService.movePage(dto, movedPage);
-    this.wsService.emitTreeRefresh(movedPage.spaceId);
+    await this.wsService.emitTreeRefresh(movedPage.spaceId, movedPage.id);
     return result;
   }
 

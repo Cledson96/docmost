@@ -99,7 +99,7 @@ export class ImportController {
       workspace.id,
     );
     if (createdPage) {
-      this.wsService.emitTreeRefresh(spaceId);
+      await this.wsService.emitTreeRefresh(spaceId, createdPage.id);
     }
 
     const ext = path.extname(file.filename).toLowerCase();

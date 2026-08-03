@@ -86,7 +86,7 @@ export class TemplateController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     const page = await this.templateService.useTemplate(dto, user, workspace);
-    this.wsService.emitTreeRefresh(page.spaceId);
+    await this.wsService.emitTreeRefresh(page.spaceId, page.id);
     return page;
   }
 }

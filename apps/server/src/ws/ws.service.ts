@@ -11,6 +11,12 @@ import {
   getUserRoomName,
 } from './ws.utils';
 
+type PreparedTreeRefresh = {
+  spaceId: string;
+  room: string;
+  recipientSocketIds: string[] | null;
+};
+
 @Injectable()
 export class WsService {
   private server: Server;
@@ -24,11 +30,60 @@ export class WsService {
     this.server = server;
   }
 
-  emitTreeRefresh(spaceId: string): void {
-    this.server.to(getSpaceRoomName(spaceId)).emit('message', {
-      operation: 'refetchRootTreeNodeEvent',
+  async emitTreeRefresh(spaceId: string, pageId: string): Promise<void> {
+    const refresh = await this.prepareTreeRefresh(spaceId, pageId);
+    this.publishPreparedTreeRefresh(refresh);
+  }
+
+  async prepareTreeRefresh(
+    spaceId: string,
+    pageId: string,
+  ): Promise<PreparedTreeRefresh> {
+    const room = getSpaceRoomName(spaceId);
+
+    if (!(await this.spaceHasRestrictions(spaceId))) {
+      return { spaceId, room, recipientSocketIds: null };
+    }
+
+    if (!(await this.pagePermissionRepo.hasRestrictedAncestor(pageId))) {
+      return { spaceId, room, recipientSocketIds: null };
+    }
+
+    const sockets = await this.server.in(room).fetchSockets();
+    const userIds = Array.from(
+      new Set(
+        sockets
+          .map((socket) => socket.data.userId as string)
+          .filter(Boolean),
+      ),
+    );
+    const authorizedUserIds =
+      await this.pagePermissionRepo.getUserIdsWithPageAccess(pageId, userIds);
+    const authorizedSet = new Set(authorizedUserIds);
+
+    return {
       spaceId,
-    });
+      room,
+      recipientSocketIds: sockets
+        .filter((socket) => authorizedSet.has(socket.data.userId as string))
+        .map((socket) => socket.id),
+    };
+  }
+
+  publishPreparedTreeRefresh(refresh: PreparedTreeRefresh): void {
+    const data = {
+      operation: 'refetchRootTreeNodeEvent',
+      spaceId: refresh.spaceId,
+    };
+
+    if (refresh.recipientSocketIds === null) {
+      this.server.to(refresh.room).emit('message', data);
+      return;
+    }
+
+    if (refresh.recipientSocketIds.length > 0) {
+      this.server.to(refresh.recipientSocketIds).emit('message', data);
+    }
   }
 
   async handleTreeEvent(client: Socket, data: any): Promise<void> {

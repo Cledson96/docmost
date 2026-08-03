@@ -140,7 +140,17 @@ export class FileImportTaskService {
       }
       try {
         await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
-        this.wsService.emitTreeRefresh(fileTask.spaceId);
+        const importedPage = await this.db
+          .selectFrom('pages')
+          .select('id')
+          .where('spaceId', '=', fileTask.spaceId)
+          .where('workspaceId', '=', fileTask.workspaceId)
+          .where('createdAt', '>=', fileTask.createdAt)
+          .orderBy('createdAt', 'desc')
+          .executeTakeFirst();
+        if (importedPage) {
+          await this.wsService.emitTreeRefresh(fileTask.spaceId, importedPage.id);
+        }
         await cleanupTmpFile();
         await cleanupTmpDir();
         // delete stored file on success
