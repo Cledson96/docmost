@@ -107,11 +107,12 @@ export class FileImportTaskService {
     }
 
     try {
+      let refreshPageId: string | null = null;
       if (
         fileTask.source === FileImportSource.Generic ||
         fileTask.source === FileImportSource.Notion
       ) {
-        await this.processGenericImport({
+        refreshPageId = await this.processGenericImport({
           extractDir: tmpExtractDir,
           fileTask,
         });
@@ -140,16 +141,11 @@ export class FileImportTaskService {
       }
       try {
         await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
-        const importedPage = await this.db
-          .selectFrom('pages')
-          .select('id')
-          .where('spaceId', '=', fileTask.spaceId)
-          .where('workspaceId', '=', fileTask.workspaceId)
-          .where('createdAt', '>=', fileTask.createdAt)
-          .orderBy('createdAt', 'desc')
-          .executeTakeFirst();
-        if (importedPage) {
-          await this.wsService.emitTreeRefresh(fileTask.spaceId, importedPage.id);
+        if (refreshPageId) {
+          await this.wsService.emitTreeRefresh(
+            fileTask.spaceId,
+            refreshPageId,
+          );
         }
         await cleanupTmpFile();
         await cleanupTmpDir();
@@ -172,7 +168,7 @@ export class FileImportTaskService {
   async processGenericImport(opts: {
     extractDir: string;
     fileTask: FileTask;
-  }): Promise<void> {
+  }): Promise<string | null> {
     const { extractDir, fileTask } = opts;
     const isNotion = fileTask.source === FileImportSource.Notion;
     const allFiles = await collectMarkdownAndHtmlFiles(extractDir);
@@ -470,7 +466,7 @@ export class FileImportTaskService {
 
     calculateLevels();
 
-    if (pagesMap.size < 1) return;
+    if (pagesMap.size < 1) return null;
 
     // Process pages level by level sequentially to respect foreign key constraints
     const allBacklinks: any[] = [];
@@ -618,6 +614,8 @@ export class FileImportTaskService {
           actorType: 'user',
         });
       }
+
+      return validPageIds.values().next().value ?? null;
     } catch (error) {
       this.logger.error('Failed to import files:', error);
       throw new Error(`File import failed: ${error?.['message']}`);
