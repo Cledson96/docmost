@@ -64,6 +64,7 @@ export class WsGateway
       const session = await this.userSessionRepo.findActiveById(sessionId);
       if (
         !session ||
+        session.revokedAt !== null ||
         session.userId !== userId ||
         session.workspaceId !== workspaceId
       ) {
