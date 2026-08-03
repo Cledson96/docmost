@@ -42,6 +42,7 @@ import {
   AUDIT_SERVICE,
   IAuditService,
 } from '../../../integrations/audit/audit.service';
+import { WsService } from '../../../ws/ws.service';
 
 @Injectable()
 export class FileImportTaskService {
@@ -56,6 +57,7 @@ export class FileImportTaskService {
     private readonly importAttachmentService: ImportAttachmentService,
     private moduleRef: ModuleRef,
     private eventEmitter: EventEmitter2,
+    private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
   ) {}
 
@@ -105,11 +107,13 @@ export class FileImportTaskService {
     }
 
     try {
+      let refreshPageId: string | null = null;
+      let confluenceRefreshWarning: string | null = null;
       if (
         fileTask.source === FileImportSource.Generic ||
         fileTask.source === FileImportSource.Notion
       ) {
-        await this.processGenericImport({
+        refreshPageId = await this.processGenericImport({
           extractDir: tmpExtractDir,
           fileTask,
         });
@@ -131,13 +135,51 @@ export class FileImportTaskService {
           { strict: false },
         );
 
-        await confluenceImportService.processConfluenceImport({
-          extractDir: tmpExtractDir,
-          fileTask,
-        });
+        // The EE importer returns the deterministic ID of one page it created
+        // for this file task. `fileTask.pageId` is an equivalent persisted
+        // reference when the importer records it there.
+        const confluenceRefreshPageId =
+          await confluenceImportService.processConfluenceImport({
+            extractDir: tmpExtractDir,
+            fileTask,
+          });
+        const candidatePageId =
+          typeof confluenceRefreshPageId === 'string'
+            ? confluenceRefreshPageId
+            : fileTask.pageId;
+
+        if (candidatePageId) {
+          const importedPage = await this.db
+            .selectFrom('pages')
+            .select('id')
+            .where('id', '=', candidatePageId)
+            .where('spaceId', '=', fileTask.spaceId)
+            .where('workspaceId', '=', fileTask.workspaceId)
+            .where('deletedAt', 'is', null)
+            .executeTakeFirst();
+
+          if (importedPage) {
+            refreshPageId = importedPage.id;
+          } else {
+            confluenceRefreshWarning =
+              `Confluence import ${fileTask.id} completed without a valid page reference`;
+          }
+        } else {
+          confluenceRefreshWarning =
+            `Confluence import ${fileTask.id} completed without a page reference`;
+        }
       }
       try {
         await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
+        if (confluenceRefreshWarning) {
+          this.logger.warn(confluenceRefreshWarning);
+        }
+        if (refreshPageId) {
+          await this.wsService.emitTreeRefresh(
+            fileTask.spaceId,
+            refreshPageId,
+          );
+        }
         await cleanupTmpFile();
         await cleanupTmpDir();
         // delete stored file on success
@@ -159,7 +201,7 @@ export class FileImportTaskService {
   async processGenericImport(opts: {
     extractDir: string;
     fileTask: FileTask;
-  }): Promise<void> {
+  }): Promise<string | null> {
     const { extractDir, fileTask } = opts;
     const isNotion = fileTask.source === FileImportSource.Notion;
     const allFiles = await collectMarkdownAndHtmlFiles(extractDir);
@@ -457,7 +499,7 @@ export class FileImportTaskService {
 
     calculateLevels();
 
-    if (pagesMap.size < 1) return;
+    if (pagesMap.size < 1) return null;
 
     // Process pages level by level sequentially to respect foreign key constraints
     const allBacklinks: any[] = [];
@@ -605,6 +647,8 @@ export class FileImportTaskService {
           actorType: 'user',
         });
       }
+
+      return validPageIds.values().next().value ?? null;
     } catch (error) {
       this.logger.error('Failed to import files:', error);
       throw new Error(`File import failed: ${error?.['message']}`);

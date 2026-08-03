@@ -39,7 +39,6 @@ import { useAtom } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import { SpaceTreeNode } from "@/features/page/tree/types";
-import { useQueryEmit } from "@/features/websocket/use-query-emit";
 
 export function usePageQuery(
   pageInput: Partial<IPageInput>,
@@ -174,7 +173,6 @@ export function useMovePageMutation() {
 export function useRestorePageMutation() {
   const { t } = useTranslation();
   const [treeData, setTreeData] = useAtom(treeDataAtom);
-  const emit = useQueryEmit();
 
   return useMutation({
     mutationFn: (pageId: string) => restorePage(pageId),
@@ -214,18 +212,6 @@ export function useRestorePageMutation() {
         // Add the node to the tree
         setTreeData(treeModel.insert(treeData, parentId, nodeData, index));
 
-        // Emit websocket event to sync with other users
-        setTimeout(() => {
-          emit({
-            operation: "addTreeNode",
-            spaceId: restoredPage.spaceId,
-            payload: {
-              parentId,
-              index,
-              data: nodeData,
-            },
-          });
-        }, 50);
       }
 
       //  await queryClient.invalidateQueries({ queryKey: ["sidebar-pages", restoredPage.spaceId] });

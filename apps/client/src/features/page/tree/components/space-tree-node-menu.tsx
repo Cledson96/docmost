@@ -24,7 +24,6 @@ import { getPageTitle } from "@/features/page/page.utils";
 import { duplicatePage } from "@/features/page/services/page-service.ts";
 import { useClipboard } from "@/hooks/use-clipboard";
 import { getAppUrl } from "@/lib/config.ts";
-import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 import {
   useFavoriteIds,
   useAddFavoriteMutation,
@@ -49,7 +48,6 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
   const { openDeleteModal } = useDeletePageModal();
   const { handleDelete } = useTreeMutation(node.spaceId);
   const [data, setData] = useAtom(treeDataAtom);
-  const emit = useQueryEmit();
   const [exportOpened, { open: openExportModal, close: closeExportModal }] =
     useDisclosure(false);
   const [
@@ -99,17 +97,6 @@ export function NodeMenu({ node, canEdit }: NodeMenuProps) {
         treeModel.insert(prev, parentId, treeNodeData, newIndex),
       );
 
-      setTimeout(() => {
-        emit({
-          operation: "addTreeNode",
-          spaceId: node.spaceId,
-          payload: {
-            parentId,
-            index: newIndex,
-            data: treeNodeData,
-          },
-        });
-      }, 50);
 
       notifications.show({ message: t("Page duplicated successfully") });
     } catch (err: any) {

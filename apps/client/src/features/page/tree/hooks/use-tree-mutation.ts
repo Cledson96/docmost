@@ -19,7 +19,6 @@ import {
 } from "@/features/page/queries/page-query.ts";
 import { buildPageUrl } from "@/features/page/page.utils.ts";
 import { getSpaceUrl } from "@/lib/config.ts";
-import { useQueryEmit } from "@/features/websocket/use-query-emit.ts";
 
 export type UseTreeMutation = {
   handleMove: (sourceId: string, op: DropOp) => Promise<void>;
@@ -41,12 +40,11 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
   const movePageMutation = useMovePageMutation();
   const navigate = useNavigate();
   const { spaceSlug, pageSlug } = useParams();
-  const emit = useQueryEmit();
 
   const handleMove = useCallback(
     async (sourceId: string, op: DropOp) => {
       const before = store.get(treeDataAtom);
-      const { tree: after, result } = treeModel.move(before, sourceId, op);
+      const { tree: after } = treeModel.move(before, sourceId, op);
       if (after === before) return;
 
       const payload = dropOpToMovePayload(before, sourceId, op);
@@ -112,22 +110,8 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
         pageData,
       );
 
-      setTimeout(() => {
-        emit({
-          operation: "moveTreeNode",
-          spaceId: spaceId,
-          payload: {
-            id: sourceId,
-            parentId: payload.parentPageId,
-            oldParentId,
-            index: result.index,
-            position: payload.position,
-            pageData,
-          },
-        });
-      }, 50);
     },
-    [setData, store, movePageMutation, spaceId, emit, t],
+    [setData, store, movePageMutation, spaceId, t],
   );
 
   const handleCreate = useCallback(
@@ -168,18 +152,6 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
 
       setData((prev) => treeModel.insert(prev, parentId, newNode, lastIndex));
 
-      setTimeout(() => {
-        emit({
-          operation: "addTreeNode",
-          spaceId,
-          payload: {
-            parentId,
-            index: lastIndex,
-            data: newNode,
-          },
-        });
-      }, 50);
-
       const pageUrl = buildPageUrl(
         spaceSlug,
         createdPage.slugId,
@@ -187,7 +159,7 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
       );
       navigate(pageUrl);
     },
-    [spaceId, createPageMutation, setData, store, emit, navigate, spaceSlug],
+    [spaceId, createPageMutation, setData, store, navigate, spaceSlug],
   );
 
   const handleRename = useCallback(
@@ -238,19 +210,11 @@ export function useTreeMutation(spaceId: string): UseTreeMutation {
           navigate(getSpaceUrl(spaceSlug));
         }
 
-        setTimeout(() => {
-          if (!node) return;
-          emit({
-            operation: "deleteTreeNode",
-            spaceId,
-            payload: { node },
-          });
-        }, 50);
       } catch (error) {
         console.error("Failed to delete page:", error);
       }
     },
-    [removePageMutation, setData, store, pageSlug, navigate, spaceSlug, emit, spaceId],
+    [removePageMutation, setData, store, pageSlug, navigate, spaceSlug],
   );
 
   return { handleMove, handleCreate, handleRename, handleDelete };

@@ -41,7 +41,6 @@ import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import { SpaceTreeNode } from "@/features/page/tree/types";
 import { useTranslation } from "react-i18next";
-import { useQueryEmit } from "@/features/websocket/use-query-emit";
 import { extractPageSlugId } from "@/lib";
 import { AutoTooltipText } from "@/components/ui/auto-tooltip-text.tsx";
 
@@ -58,7 +57,6 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
   const { t } = useTranslation();
   const [data, setData] = useAtom(treeDataAtom);
   const createPageMutation = useCreatePageMutation();
-  const emit = useQueryEmit();
   const isInCommentContext = props.isInCommentContext ?? false;
 
   const { data: suggestion, isLoading } = useSearchSuggestionsQuery({
@@ -286,17 +284,6 @@ const MentionList = forwardRef<any, MentionListProps>((props, ref) => {
         creatorId: currentUser?.user.id,
       });
 
-      setTimeout(() => {
-        emit({
-          operation: "addTreeNode",
-          spaceId: space.id,
-          payload: {
-            parentId,
-            index: lastIndex,
-            data: newNode,
-          },
-        });
-      }, 50);
     } catch (err) {
       throw new Error("Failed to create page");
     }

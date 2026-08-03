@@ -11,7 +11,7 @@ function build() {
     getBaseInfo: jest.fn().mockResolvedValue({}),
     updateBase: jest.fn().mockResolvedValue({}),
     deleteBase: jest.fn().mockResolvedValue({}),
-    convertPageToBase: jest.fn().mockResolvedValue({}),
+    convertPageToBase: jest.fn().mockResolvedValue(page),
     exportToCsv: jest.fn().mockResolvedValue('a,b'),
     listBases: jest.fn().mockResolvedValue([]),
     createProperty: jest.fn().mockResolvedValue({}),
@@ -39,8 +39,13 @@ function build() {
     assertCanCreateInSpace: jest.fn().mockResolvedValue(undefined),
   };
 
-  const controller = new BaseController(baseService as any, access as any);
-  return { controller, baseService, access };
+  const wsService = { emitTreeRefresh: jest.fn() };
+  const controller = new BaseController(
+    baseService as any,
+    access as any,
+    wsService as any,
+  );
+  return { controller, baseService, access, wsService };
 }
 
 const res = { header: jest.fn(), send: jest.fn() } as any;

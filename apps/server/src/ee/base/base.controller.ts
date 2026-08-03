@@ -36,6 +36,7 @@ import {
   UpdateViewDto,
   DeleteViewDto,
 } from './dto/base.dto';
+import { WsService } from '../../ws/ws.service';
 
 @UseGuards(JwtAuthGuard)
 @Controller('bases')
@@ -43,6 +44,7 @@ export class BaseController {
   constructor(
     private readonly baseService: BaseService,
     private readonly baseAccess: BaseAccessService,
+    private readonly wsService: WsService,
   ) {}
 
   @HttpCode(HttpStatus.OK)
@@ -110,7 +112,14 @@ export class BaseController {
     @AuthWorkspace() workspace: Workspace,
   ) {
     await this.baseAccess.assertCanEditPage(dto.pageId, user, workspace.id);
-    return this.baseService.convertPageToBase(dto.pageId, dto.template, user.id, workspace.id);
+    const base = await this.baseService.convertPageToBase(
+      dto.pageId,
+      dto.template,
+      user.id,
+      workspace.id,
+    );
+    await this.wsService.emitTreeRefresh(base.spaceId, base.id);
+    return base;
   }
 
   @HttpCode(HttpStatus.OK)

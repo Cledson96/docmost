@@ -61,30 +61,36 @@ export class UserSessionRepo {
     id: string,
     userId: string,
     workspaceId: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<string[]> {
+    const sessions = await this.db
       .updateTable('userSessions')
       .set({ revokedAt: new Date() })
       .where('id', '=', id)
       .where('userId', '=', userId)
       .where('workspaceId', '=', workspaceId)
       .where('revokedAt', 'is', null)
+      .returning('id')
       .execute();
+
+    return sessions.map((session) => session.id);
   }
 
   async revokeAllExceptCurrent(
     currentSessionId: string,
     userId: string,
     workspaceId: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<string[]> {
+    const sessions = await this.db
       .updateTable('userSessions')
       .set({ revokedAt: new Date() })
       .where('userId', '=', userId)
       .where('workspaceId', '=', workspaceId)
       .where('id', '!=', currentSessionId)
       .where('revokedAt', 'is', null)
+      .returning('id')
       .execute();
+
+    return sessions.map((session) => session.id);
   }
 
   async revokeByUserId(
@@ -105,25 +111,31 @@ export class UserSessionRepo {
   async deleteByUserId(
     userId: string,
     workspaceId: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<string[]> {
+    const sessions = await this.db
       .deleteFrom('userSessions')
       .where('userId', '=', userId)
       .where('workspaceId', '=', workspaceId)
+      .returning('id')
       .execute();
+
+    return sessions.map((session) => session.id);
   }
 
   async deleteAllExceptCurrent(
     currentSessionId: string,
     userId: string,
     workspaceId: string,
-  ): Promise<void> {
-    await this.db
+  ): Promise<string[]> {
+    const sessions = await this.db
       .deleteFrom('userSessions')
       .where('userId', '=', userId)
       .where('workspaceId', '=', workspaceId)
       .where('id', '!=', currentSessionId)
+      .returning('id')
       .execute();
+
+    return sessions.map((session) => session.id);
   }
 
   async deleteStale(retentionDays: number): Promise<void> {

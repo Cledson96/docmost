@@ -1,4 +1,4 @@
-import { Inject, Injectable } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { Cache } from 'cache-manager';
 import { Server, Socket } from 'socket.io';
@@ -11,9 +11,16 @@ import {
   getUserRoomName,
 } from './ws.utils';
 
+type PreparedTreeRefresh = {
+  spaceId: string;
+  room: string;
+  recipientSocketIds: string[] | null;
+};
+
 @Injectable()
 export class WsService {
   private server: Server;
+  private readonly logger = new Logger(WsService.name);
 
   constructor(
     private readonly pagePermissionRepo: PagePermissionRepo,
@@ -22,6 +29,107 @@ export class WsService {
 
   setServer(server: Server): void {
     this.server = server;
+  }
+
+  async disconnectSession(sessionId: string): Promise<void> {
+    await this.disconnectSessions([sessionId]);
+  }
+
+  async disconnectSessions(sessionIds: Iterable<string>): Promise<void> {
+    const sessionIdSet = new Set(sessionIds);
+    if (!this.server || sessionIdSet.size === 0) return;
+
+    let sockets: Awaited<ReturnType<Server['fetchSockets']>>;
+    try {
+      sockets = await this.server.fetchSockets();
+    } catch (err) {
+      this.logger.warn('Failed to fetch sockets for session disconnection', err);
+      return;
+    }
+
+    for (const socket of sockets) {
+      if (!sessionIdSet.has(socket.data.sessionId as string)) continue;
+
+      try {
+        socket.disconnect();
+      } catch (err) {
+        this.logger.warn(
+          `Failed to disconnect socket ${socket.id} for an invalidated session`,
+          err,
+        );
+      }
+    }
+  }
+
+  async emitTreeRefresh(spaceId: string, pageId: string): Promise<void> {
+    try {
+      const refresh = await this.prepareTreeRefresh(spaceId, pageId);
+      this.publishPreparedTreeRefresh(refresh);
+    } catch (err) {
+      this.logger.warn('Failed to emit tree refresh', err);
+    }
+  }
+
+  async prepareTreeRefresh(
+    spaceId: string,
+    pageId: string,
+  ): Promise<PreparedTreeRefresh | null> {
+    try {
+      const room = getSpaceRoomName(spaceId);
+
+      if (!(await this.spaceHasRestrictions(spaceId))) {
+        return { spaceId, room, recipientSocketIds: null };
+      }
+
+      if (!(await this.pagePermissionRepo.hasRestrictedAncestor(pageId))) {
+        return { spaceId, room, recipientSocketIds: null };
+      }
+
+      const sockets = await this.server.in(room).fetchSockets();
+      const userIds = Array.from(
+        new Set(
+          sockets
+            .map((socket) => socket.data.userId as string)
+            .filter(Boolean),
+        ),
+      );
+      const authorizedUserIds =
+        await this.pagePermissionRepo.getUserIdsWithPageAccess(pageId, userIds);
+      const authorizedSet = new Set(authorizedUserIds);
+
+      return {
+        spaceId,
+        room,
+        recipientSocketIds: sockets
+          .filter((socket) => authorizedSet.has(socket.data.userId as string))
+          .map((socket) => socket.id),
+      };
+    } catch (err) {
+      this.logger.warn('Failed to prepare tree refresh', err);
+      return null;
+    }
+  }
+
+  publishPreparedTreeRefresh(refresh: PreparedTreeRefresh | null): void {
+    if (!refresh) return;
+
+    try {
+      const data = {
+        operation: 'refetchRootTreeNodeEvent',
+        spaceId: refresh.spaceId,
+      };
+
+      if (refresh.recipientSocketIds === null) {
+        this.server.to(refresh.room).emit('message', data);
+        return;
+      }
+
+      if (refresh.recipientSocketIds.length > 0) {
+        this.server.to(refresh.recipientSocketIds).emit('message', data);
+      }
+    } catch (err) {
+      this.logger.warn('Failed to publish tree refresh', err);
+    }
   }
 
   async handleTreeEvent(client: Socket, data: any): Promise<void> {

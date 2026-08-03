@@ -24,7 +24,6 @@ import { useAtom } from "jotai";
 import { treeDataAtom } from "@/features/page/tree/atoms/tree-data-atom";
 import { treeModel } from "@/features/page/tree/model/tree-model";
 import { SpaceTreeNode } from "@/features/page/tree/types";
-import { socketAtom } from "@/features/websocket/atoms/socket-atom";
 
 export function useBaseQuery(
   pageId: string | undefined,
@@ -58,7 +57,6 @@ export function useCreateBaseMutation() {
 export function useConvertPageToBaseMutation() {
   const { t } = useTranslation();
   const [, setTreeData] = useAtom(treeDataAtom);
-  const [socket] = useAtom(socketAtom);
 
   return useMutation<IBase, Error, { pageId: string; template?: "kanban" }>({
     mutationFn: ({ pageId, template }) => convertPageToBase(pageId, template),
@@ -75,13 +73,6 @@ export function useConvertPageToBaseMutation() {
       setTreeData((prev) =>
         treeModel.update(prev, base.id, { isBase: true } as Partial<SpaceTreeNode>),
       );
-      socket?.emit("message", {
-        operation: "updateOne",
-        spaceId: base.spaceId,
-        entity: ["pages"],
-        id: base.id,
-        payload: { isBase: true, slugId: base.slugId },
-      });
     },
     onError: (error) => {
       notifications.show({

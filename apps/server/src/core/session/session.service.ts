@@ -10,6 +10,7 @@ import {
   AUDIT_CONTEXT_KEY,
 } from '../../common/middlewares/audit-context.middleware';
 import * as Bowser from 'bowser';
+import { WsService } from '../../ws/ws.service';
 
 const MAX_SESSIONS_PER_USER = 25;
 const RETENTION_DAYS = 7;
@@ -23,6 +24,7 @@ export class SessionService {
     private readonly userSessionRepo: UserSessionRepo,
     private readonly environmentService: EnvironmentService,
     private readonly cls: ClsService,
+    private readonly wsService: WsService,
   ) {}
 
   @Interval('session-cleanup', 24 * 60 * 60 * 1000)
@@ -86,7 +88,12 @@ export class SessionService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    await this.userSessionRepo.revokeById(sessionId, userId, workspaceId);
+    const sessionIds = await this.userSessionRepo.revokeById(
+      sessionId,
+      userId,
+      workspaceId,
+    );
+    await this.wsService.disconnectSessions(sessionIds);
   }
 
   async revokeAllOtherSessions(
@@ -94,11 +101,33 @@ export class SessionService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
-    await this.userSessionRepo.revokeAllExceptCurrent(
+    const sessionIds = await this.userSessionRepo.revokeAllExceptCurrent(
       currentSessionId,
       userId,
       workspaceId,
     );
+    await this.wsService.disconnectSessions(sessionIds);
+  }
+
+  async deleteAllOtherSessions(
+    currentSessionId: string,
+    userId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const sessionIds = await this.userSessionRepo.deleteAllExceptCurrent(
+      currentSessionId,
+      userId,
+      workspaceId,
+    );
+    await this.wsService.disconnectSessions(sessionIds);
+  }
+
+  async deleteAllSessions(userId: string, workspaceId: string): Promise<void> {
+    const sessionIds = await this.userSessionRepo.deleteByUserId(
+      userId,
+      workspaceId,
+    );
+    await this.wsService.disconnectSessions(sessionIds);
   }
 
   private parseDeviceName(userAgent: string | null): string | null {
