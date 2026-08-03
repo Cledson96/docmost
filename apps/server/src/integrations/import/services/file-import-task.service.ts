@@ -134,10 +134,17 @@ export class FileImportTaskService {
           { strict: false },
         );
 
-        await confluenceImportService.processConfluenceImport({
-          extractDir: tmpExtractDir,
-          fileTask,
-        });
+        // The EE importer returns the deterministic ID of one page it created
+        // for this file task. A missing ID deliberately suppresses the refresh
+        // rather than risking a refresh derived from another import.
+        const confluenceRefreshPageId =
+          await confluenceImportService.processConfluenceImport({
+            extractDir: tmpExtractDir,
+            fileTask,
+          });
+        if (typeof confluenceRefreshPageId === 'string') {
+          refreshPageId = confluenceRefreshPageId;
+        }
       }
       try {
         await this.updateTaskStatus(fileTaskId, FileTaskStatus.Success, null);
