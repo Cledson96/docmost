@@ -10,6 +10,7 @@ import {
   AUDIT_CONTEXT_KEY,
 } from '../../common/middlewares/audit-context.middleware';
 import * as Bowser from 'bowser';
+import { WsService } from '../../ws/ws.service';
 
 const MAX_SESSIONS_PER_USER = 25;
 const RETENTION_DAYS = 7;
@@ -23,6 +24,7 @@ export class SessionService {
     private readonly userSessionRepo: UserSessionRepo,
     private readonly environmentService: EnvironmentService,
     private readonly cls: ClsService,
+    private readonly wsService: WsService,
   ) {}
 
   @Interval('session-cleanup', 24 * 60 * 60 * 1000)
@@ -87,6 +89,7 @@ export class SessionService {
     workspaceId: string,
   ): Promise<void> {
     await this.userSessionRepo.revokeById(sessionId, userId, workspaceId);
+    await this.wsService.disconnectSession(sessionId);
   }
 
   async revokeAllOtherSessions(
@@ -94,10 +97,57 @@ export class SessionService {
     userId: string,
     workspaceId: string,
   ): Promise<void> {
+    const sessions = await this.userSessionRepo.findActiveByUser(
+      userId,
+      workspaceId,
+    );
+
     await this.userSessionRepo.revokeAllExceptCurrent(
       currentSessionId,
       userId,
       workspaceId,
+    );
+
+    await Promise.all(
+      sessions
+        .filter((session) => session.id !== currentSessionId)
+        .map((session) => this.wsService.disconnectSession(session.id)),
+    );
+  }
+
+  async deleteAllOtherSessions(
+    currentSessionId: string,
+    userId: string,
+    workspaceId: string,
+  ): Promise<void> {
+    const sessions = await this.userSessionRepo.findActiveByUser(
+      userId,
+      workspaceId,
+    );
+
+    await this.userSessionRepo.deleteAllExceptCurrent(
+      currentSessionId,
+      userId,
+      workspaceId,
+    );
+
+    await Promise.all(
+      sessions
+        .filter((session) => session.id !== currentSessionId)
+        .map((session) => this.wsService.disconnectSession(session.id)),
+    );
+  }
+
+  async deleteAllSessions(userId: string, workspaceId: string): Promise<void> {
+    const sessions = await this.userSessionRepo.findActiveByUser(
+      userId,
+      workspaceId,
+    );
+
+    await this.userSessionRepo.deleteByUserId(userId, workspaceId);
+
+    await Promise.all(
+      sessions.map((session) => this.wsService.disconnectSession(session.id)),
     );
   }
 

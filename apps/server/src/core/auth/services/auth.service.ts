@@ -9,7 +9,6 @@ import { LoginDto } from '../dto/login.dto';
 import { CreateUserDto } from '../dto/create-user.dto';
 import { TokenService } from './token.service';
 import { SessionService } from '../../session/session.service';
-import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { SignupService } from './signup.service';
 import { CreateAdminUserDto } from '../dto/create-admin-user.dto';
 import { UserRepo } from '@docmost/db/repos/user/user.repo';
@@ -47,7 +46,6 @@ export class AuthService {
     private signupService: SignupService,
     private tokenService: TokenService,
     private sessionService: SessionService,
-    private userSessionRepo: UserSessionRepo,
     private userRepo: UserRepo,
     private userTokenRepo: UserTokenRepo,
     private mailService: MailService,
@@ -144,13 +142,13 @@ export class AuthService {
     );
 
     if (currentSessionId) {
-      await this.userSessionRepo.deleteAllExceptCurrent(
+      await this.sessionService.deleteAllOtherSessions(
         currentSessionId,
         userId,
         workspaceId,
       );
     } else {
-      await this.userSessionRepo.deleteByUserId(userId, workspaceId);
+      await this.sessionService.deleteAllSessions(userId, workspaceId);
     }
 
     this.auditService.log({
@@ -259,7 +257,7 @@ export class AuthService {
         .execute();
     });
 
-    await this.userSessionRepo.deleteByUserId(user.id, workspace.id);
+    await this.sessionService.deleteAllSessions(user.id, workspace.id);
 
     this.auditService.setActorId(user.id);
     this.auditService.log({

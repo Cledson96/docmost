@@ -30,6 +30,17 @@ export class WsService {
     this.server = server;
   }
 
+  async disconnectSession(sessionId: string): Promise<void> {
+    if (!this.server) return;
+
+    const sockets = await this.server.fetchSockets();
+    for (const socket of sockets) {
+      if (socket.data.sessionId === sessionId) {
+        socket.disconnect();
+      }
+    }
+  }
+
   async emitTreeRefresh(spaceId: string, pageId: string): Promise<void> {
     const refresh = await this.prepareTreeRefresh(spaceId, pageId);
     this.publishPreparedTreeRefresh(refresh);
