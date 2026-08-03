@@ -6,7 +6,7 @@
 - As configurações do pnpm (`overrides`, `patchedDependencies`) ficam em `pnpm-workspace.yaml`, não no campo `pnpm` do `package.json` — o pnpm 11 ignora esse campo silenciosamente.
 - `pnpm dev` inicia Vite e o servidor Nest juntos. Para trabalho isolado, use scripts filtrados, por exemplo `pnpm --filter client build` ou `pnpm --filter server test -- <teste>`.
 - Cliente: `pnpm --filter client lint`, `pnpm --filter client test -- <teste>` e `pnpm --filter client build`. O build executa `tsc` antes do Vite.
-- Servidor: `pnpm --filter server test -- <teste>`, `pnpm --filter server test:e2e` e `pnpm --filter server build`. Unit tests usam `src/**/*.spec.ts`; E2E usam `test/*.e2e-spec.ts`.
+- Servidor: `pnpm --filter server test -- <teste>`, `pnpm --filter server test:e2e` e `pnpm --filter server build`. Unit tests usam `src/**/*.spec.ts`; E2E usam `test/*.e2e-spec.ts`. `test/jest-e2e.json` mantém o mesmo allowlist `transformIgnorePatterns` do Jest unitário para transformar dependências ESM, incluindo `uuid`.
 - `pnpm --filter server lint` executa ESLint com `--fix` e modifica arquivos. O lint do client não corrige automaticamente.
 - `pnpm build` executa o build completo Nx com dependências na ordem correta. O CI de `main` instala com lockfile congelado, roda esse comando e depois os testes unitários de server e client.
 
