@@ -16,5 +16,5 @@
 
 - Com Redis habilitado, a instância dona de um documento trata mensagens Yjs e outras instâncias usam o proxy/lock Redis em `extensions/redis-sync`. Preserve esse protocolo ao alterar eventos colaborativos.
 - `COLLAB_DISABLE_REDIS` permite conexão direta, mas eventos Yjs customizados passam pelo Redis. No modo sem Redis, ações como marcação inline de comentário podem não ter efeito; trate esse modo ao alterar comentários/editor.
-- Socket.IO autentica pelo cookie e coloca conexões em salas de usuário, workspace e spaces autorizados. `WsService` refaz filtragem por usuário ao transmitir mudanças de árvore de páginas restritas.
+- Socket.IO autentica pelo cookie e exige uma `user_session` ativa que corresponda ao usuário e workspace do JWT antes de colocar conexões em salas de usuário, workspace e spaces autorizados. `WsService` refaz filtragem por usuário ao transmitir mudanças de árvore de páginas restritas.
 - O emissor exclui somente o socket originador, não todas as abas do usuário, para manter múltiplas abas sincronizadas. A presença de páginas restritas é cacheada por 30 segundos e precisa ser invalidada quando permissões/restrições mudam.

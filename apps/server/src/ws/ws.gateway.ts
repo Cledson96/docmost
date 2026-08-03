@@ -12,6 +12,7 @@ import { TokenService } from '../core/auth/services/token.service';
 import { JwtPayload, JwtType } from '../core/auth/dto/jwt-payload';
 import { OnModuleDestroy } from '@nestjs/common';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
+import { UserSessionRepo } from '@docmost/db/repos/session/user-session.repo';
 import { WsService } from './ws.service';
 import { getSpaceRoomName, getUserRoomName } from './ws.utils';
 import { BaseRealtimeBridge } from './base-realtime.bridge';
@@ -33,6 +34,7 @@ export class WsGateway
 
   constructor(
     private tokenService: TokenService,
+    private userSessionRepo: UserSessionRepo,
     private spaceMemberRepo: SpaceMemberRepo,
     private wsService: WsService,
     private baseRealtime: BaseRealtimeBridge,
@@ -53,9 +55,24 @@ export class WsGateway
 
       const userId = token.sub;
       const workspaceId = token.workspaceId;
+      const sessionId = token.sessionId;
+
+      if (!sessionId) {
+        throw new Error('Session is required');
+      }
+
+      const session = await this.userSessionRepo.findActiveById(sessionId);
+      if (
+        !session ||
+        session.userId !== userId ||
+        session.workspaceId !== workspaceId
+      ) {
+        throw new Error('Session is not active');
+      }
 
       client.data.userId = userId;
       client.data.workspaceId = workspaceId;
+      client.data.sessionId = session.id;
 
       const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(userId);
 
