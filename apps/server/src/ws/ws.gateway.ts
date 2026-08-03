@@ -61,6 +61,10 @@ export class WsGateway
         throw new Error('Session is required');
       }
 
+      // Register the session before awaiting the database lookup so a concurrent
+      // revocation can find and disconnect this socket.
+      client.data.sessionId = sessionId;
+
       const session = await this.userSessionRepo.findActiveById(sessionId);
       if (
         !session ||
@@ -73,13 +77,16 @@ export class WsGateway
 
       client.data.userId = userId;
       client.data.workspaceId = workspaceId;
-      client.data.sessionId = session.id;
 
       const userSpaceIds = await this.spaceMemberRepo.getUserSpaceIds(userId);
 
       const userRoom = getUserRoomName(userId);
       const workspaceRoom = `workspace-${workspaceId}`;
       const spaceRooms = userSpaceIds.map((id) => getSpaceRoomName(id));
+
+      // The session may have been revoked while its active state or memberships
+      // were being read. disconnectSessions marks the socket disconnected.
+      if (!client.connected) return;
 
       client.join([userRoom, workspaceRoom, ...spaceRooms]);
     } catch (err) {

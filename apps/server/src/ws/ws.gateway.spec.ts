@@ -22,6 +22,7 @@ describe('WsGateway', () => {
   function createClient() {
     return {
       handshake: { headers: { cookie: 'authToken=valid-token' } },
+      connected: true,
       data: {},
       emit: jest.fn(),
       disconnect: jest.fn(),
@@ -29,7 +30,9 @@ describe('WsGateway', () => {
     } as unknown as Socket;
   }
 
-  function createGateway(session: UserSession | undefined) {
+  function createGateway(
+    session: UserSession | undefined | Promise<UserSession | undefined>,
+  ) {
     const tokenService = {
       verifyJwt: jest.fn().mockResolvedValue({
         sub: 'user-1',
@@ -50,15 +53,18 @@ describe('WsGateway', () => {
       isBaseEvent: jest.fn(),
       handleInbound: jest.fn(),
     };
+    const userSessionRepo = {
+      findActiveById: jest.fn().mockResolvedValue(session),
+    };
     const gateway = new WsGateway(
       tokenService as any,
-      { findActiveById: jest.fn().mockResolvedValue(session) } as any,
+      userSessionRepo as any,
       spaceMemberRepo as any,
       wsService as any,
       baseRealtime as any,
     );
 
-    return { gateway, wsService, baseRealtime };
+    return { gateway, userSessionRepo, wsService, baseRealtime };
   }
 
   it('disconnects a client whose valid token has no active session', async () => {
@@ -92,6 +98,28 @@ describe('WsGateway', () => {
 
     expect(client.data.sessionId).toBe('session-1');
     expect(client.join).toHaveBeenCalledWith(['user-user-1', 'workspace-workspace-1']);
+  });
+
+  it('does not join rooms when a concurrent session revocation disconnects the client during session validation', async () => {
+    let resolveSession: (session: UserSession | undefined) => void;
+    const pendingSession = new Promise<UserSession | undefined>((resolve) => {
+      resolveSession = resolve;
+    });
+    const client = createClient();
+    const { gateway, userSessionRepo } = createGateway(pendingSession);
+
+    const connection = gateway.handleConnection(client);
+    await new Promise(setImmediate);
+
+    expect(userSessionRepo.findActiveById).toHaveBeenCalledWith('session-1');
+    expect(client.data.sessionId).toBe('session-1');
+
+    client.connected = false;
+    resolveSession!(activeSession);
+    await connection;
+
+    expect(client.join).not.toHaveBeenCalled();
+    expect(client.emit).not.toHaveBeenCalled();
   });
 
   it('does not broadcast client-originated tree events', async () => {
