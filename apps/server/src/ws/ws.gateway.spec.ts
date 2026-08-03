@@ -61,6 +61,19 @@ describe('WsGateway', () => {
     expect(client.disconnect).toHaveBeenCalled();
   });
 
+  it('disconnects a client whose valid token resolves to a revoked session', async () => {
+    const client = createClient();
+    const gateway = createGateway({
+      ...activeSession,
+      revokedAt: new Date(),
+    });
+
+    await gateway.handleConnection(client);
+
+    expect(client.emit).toHaveBeenCalledWith('Unauthorized');
+    expect(client.disconnect).toHaveBeenCalled();
+  });
+
   it('stores the active session id and joins rooms for a valid session', async () => {
     const client = createClient();
     const gateway = createGateway(activeSession);
