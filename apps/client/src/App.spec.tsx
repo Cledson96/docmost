@@ -23,9 +23,14 @@ vi.mock("@/features/workspace/queries/workspace-query.ts", () => ({
   }),
 }));
 vi.mock("@/ee/components/sso-login.tsx", () => ({ default: () => null }));
-vi.mock("react-i18next", () => ({
-  useTranslation: () => ({ t: (key: string) => key }),
-}));
+vi.mock("react-i18next", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("react-i18next")>();
+
+  return {
+    ...actual,
+    useTranslation: () => ({ t: (key: string) => key }),
+  };
+});
 
 it("renders a lazy route page through the shared suspense boundary", async () => {
   render(
