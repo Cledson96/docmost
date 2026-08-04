@@ -10,6 +10,10 @@ import * as Y from 'yjs';
 import { User } from '@docmost/db/types/entity.types';
 import { snapshotDocument } from './rich-content/rich-content-yjs.util';
 import type { RichContentSnapshot } from './rich-content/rich-content.types';
+import {
+  applyBlockOperations,
+  type ApplyBlockOperationsInput,
+} from './rich-content/block-operations';
 
 export type CollabEventHandlers = ReturnType<
   CollaborationHandler['getHandlers']
@@ -45,6 +49,22 @@ export class CollaborationHandler {
           },
         );
 
+        return snapshot!;
+      },
+      applyBlockOperations: async (
+        documentName: string,
+        payload: ApplyBlockOperationsInput & { user: User },
+      ): Promise<RichContentSnapshot> => {
+        let snapshot: RichContentSnapshot;
+        await this.withYdocConnection(
+          hocuspocus,
+          documentName,
+          { user: payload.user },
+          (doc) => {
+            applyBlockOperations(doc, payload);
+            snapshot = snapshotDocument(doc);
+          },
+        );
         return snapshot!;
       },
       setCommentMark: async (
