@@ -83,6 +83,7 @@ const attributes = (
     type: 'string',
     ...attributeMetadata[input.name],
     ...input,
+    ...(input.type ? { format: input.format } : {}),
   }));
 
 const node = (
@@ -128,6 +129,7 @@ export const richContentCapabilities = [
       {
         name: 'placeholder',
         description: 'Upload placeholder state.',
+        type: 'string',
         transient: true,
       },
     ],
@@ -232,7 +234,7 @@ export const richContentCapabilities = [
       { name: 'src', description: 'Embed URL.', required: true },
       { name: 'provider', description: 'Embed provider identifier.' },
       { name: 'align', description: 'Embed alignment.' },
-      { name: 'width', description: 'Embed width.' },
+      { name: 'width', description: 'Embed width.', type: 'number' },
       { name: 'height', description: 'Embed height.' },
     ],
   }),
@@ -371,7 +373,7 @@ export const richContentCapabilities = [
       { name: 'name', description: 'Display file name.' },
       { name: 'attachmentId', description: 'Stored attachment identifier.' },
       { name: 'size', description: 'PDF size in bytes.' },
-      { name: 'width', description: 'PDF width.' },
+      { name: 'width', description: 'PDF width.', type: 'number' },
       { name: 'height', description: 'PDF height.' },
       {
         name: 'placeholder',
@@ -387,6 +389,8 @@ export const richContentCapabilities = [
       {
         name: 'color',
         description: 'Status color.',
+        type: 'string',
+        enum: ['gray', 'blue', 'green', 'yellow', 'red', 'purple'],
         validation: 'gray, blue, green, yellow, red, or purple',
       },
     ],

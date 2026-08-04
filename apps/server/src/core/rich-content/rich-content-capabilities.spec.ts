@@ -250,7 +250,54 @@ describe('rich content capabilities', () => {
       format: 'identifier',
     });
     expect(attribute('details', 'open')).toMatchObject({ type: 'boolean' });
+    expect(attribute('status', 'color')).toMatchObject({
+      type: 'string',
+      enum: ['gray', 'blue', 'green', 'yellow', 'red', 'purple'],
+    });
   });
+
+  it('preserves the schema types of transient upload attributes', () => {
+    const attribute = (capabilityName: string, attributeName: string) =>
+      richContentCapabilities
+        .find((capability) => capability.name === capabilityName)
+        ?.attributes.find((candidate) => candidate.name === attributeName);
+
+    expect(attribute('attachment', 'placeholder')).toMatchObject({
+      type: 'string',
+      transient: true,
+    });
+    for (const capabilityName of ['audio', 'image', 'pdf', 'video']) {
+      expect(attribute(capabilityName, 'placeholder')).toMatchObject({
+        type: 'object',
+        transient: true,
+      });
+    }
+  });
+
+  it.each([
+    ['image', 'width', 'number | string', 'percentage-or-number'],
+    ['image', 'height', 'number', undefined],
+    ['video', 'width', 'number | string', 'percentage-or-number'],
+    ['video', 'height', 'number', undefined],
+    ['pdf', 'width', 'number', undefined],
+    ['pdf', 'height', 'number', undefined],
+    ['drawio', 'width', 'number | string', 'percentage-or-number'],
+    ['drawio', 'height', 'number', undefined],
+    ['excalidraw', 'width', 'number | string', 'percentage-or-number'],
+    ['excalidraw', 'height', 'number', undefined],
+    ['embed', 'width', 'number', undefined],
+    ['embed', 'height', 'number', undefined],
+  ])(
+    'describes %s.%s dimensions faithfully',
+    (capabilityName, attributeName, type, format) => {
+      const attribute = richContentCapabilities
+        .find((capability) => capability.name === capabilityName)
+        ?.attributes.find((candidate) => candidate.name === attributeName);
+
+      expect(attribute?.type).toBe(type);
+      expect(attribute?.format).toBe(format);
+    },
+  );
 
   it('registers every agent-addressable type as a schema node, never a mark', () => {
     const schema = getSchema(tiptapExtensions);
