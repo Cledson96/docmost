@@ -63,6 +63,10 @@ import { getPageTitle } from '../../common/helpers';
 import { RichContentCapabilitiesService } from './rich-content/rich-content-capabilities.service';
 import { ContentReaderService } from './rich-content/content-reader.service';
 import { CollaborationGateway } from '../../collaboration/collaboration.gateway';
+import {
+  BlockEditRequestError,
+  BlockEditService,
+} from './rich-content/block-edit.service';
 
 /**
  * Every revision we've tested against. Our initialize/tools/list/tools/call
@@ -131,6 +135,7 @@ export class McpService {
     private readonly richContentCapabilitiesService: RichContentCapabilitiesService,
     private readonly contentReaderService: ContentReaderService,
     private readonly collaborationGateway: CollaborationGateway,
+    private readonly blockEditService: BlockEditService,
   ) {}
 
   async handleRpcRequest(body: any, user: User, workspace: Workspace) {
@@ -221,6 +226,9 @@ export class McpService {
   private toToolErrorMessage(err: any): string {
     if (err instanceof ForbiddenException) {
       return 'You do not have permission to perform this action.';
+    }
+    if (err instanceof BlockEditRequestError || typeof err?.code === 'string') {
+      return `${err.code}: ${err.message}`;
     }
     return err?.message || 'Unknown error';
   }
@@ -783,6 +791,33 @@ export class McpService {
             },
           },
           required: ['pageId'],
+        },
+      },
+      {
+        name: 'edit_page_blocks',
+        description:
+          'Atomically edit one page using block IDs from get_page. Content fields use Agent Markdown. Supply the revision returned by get_page to prevent overwriting a newer edit.',
+        inputSchema: {
+          type: 'object',
+          additionalProperties: false,
+          properties: {
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            expectedRevision: { type: 'string', description: 'Revision returned by get_page' },
+            operations: {
+              type: 'array',
+              maxItems: 50,
+              items: {
+                oneOf: [
+                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'content'], properties: { type: { enum: ['insertBefore', 'insertAfter', 'insertIn'] }, target: { type: 'string' }, content: { type: 'string', description: 'One block of Agent Markdown' } } },
+                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'attrs'], properties: { type: { const: 'update' }, target: { type: 'string' }, attrs: { type: 'object' } } },
+                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'destination'], properties: { type: { const: 'move' }, target: { type: 'string' }, destination: { type: 'string' }, position: { enum: ['before', 'after', 'in'] } } },
+                  { type: 'object', additionalProperties: false, required: ['type', 'target'], properties: { type: { const: 'delete' }, target: { type: 'string' } } },
+                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'from', 'to', 'content'], properties: { type: { const: 'replaceRange' }, target: { type: 'string' }, from: { type: 'integer', minimum: 0 }, to: { type: 'integer', minimum: 0 }, content: { type: 'string', description: 'Agent Markdown blocks' } } },
+                ],
+              },
+            },
+          },
+          required: ['pageId', 'expectedRevision', 'operations'],
         },
       },
       {
@@ -1433,6 +1468,9 @@ export class McpService {
           updatedAt: page.updatedAt,
         };
       }
+
+      case 'edit_page_blocks':
+        return this.blockEditService.edit(args, user, workspace);
 
       case 'search_users':
         return this.userRepo.getUsersPaginated(workspace.id, this.pagination(args));

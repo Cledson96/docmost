@@ -25,7 +25,7 @@ type Located = { node: Y.XmlElement | Y.XmlText; parent: Y.XmlFragment | Y.XmlEl
 const capabilities = new Map(richContentCapabilities.map((item) => [item.name, item]));
 const schema = getSchema(tiptapExtensions);
 
-export function applyBlockOperations(doc: Y.Doc, input: ApplyBlockOperationsInput): void {
+export function applyRichContentOperations(doc: Y.Doc, input: ApplyBlockOperationsInput): void {
   if (input.expectedRevision && input.expectedRevision !== revisionForDocument(doc)) {
     throw new BlockOperationError('STALE_REVISION', 'The page revision is stale');
   }
@@ -45,6 +45,10 @@ export function applyBlockOperations(doc: Y.Doc, input: ApplyBlockOperationsInpu
   }
   applyAll(doc, input.operations);
 }
+
+// Kept for existing collaboration callers while the MCP event uses the
+// richer name that describes the document-level operation contract.
+export const applyBlockOperations = applyRichContentOperations;
 
 function applyAll(doc: Y.Doc, operations: BlockOperation[]) {
   doc.transact(() => operations.forEach((operation) => applyOne(doc, operation)));

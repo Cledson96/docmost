@@ -11,7 +11,7 @@ import { User } from '@docmost/db/types/entity.types';
 import { snapshotDocument } from './rich-content/rich-content-yjs.util';
 import type { RichContentSnapshot } from './rich-content/rich-content.types';
 import {
-  applyBlockOperations,
+  applyRichContentOperations,
   type ApplyBlockOperationsInput,
 } from './rich-content/block-operations';
 
@@ -51,7 +51,7 @@ export class CollaborationHandler {
 
         return snapshot!;
       },
-      applyBlockOperations: async (
+      editPageBlocks: async (
         documentName: string,
         payload: ApplyBlockOperationsInput & { user: User },
       ): Promise<RichContentSnapshot> => {
@@ -61,7 +61,7 @@ export class CollaborationHandler {
           documentName,
           { user: payload.user },
           (doc) => {
-            applyBlockOperations(doc, payload);
+            applyRichContentOperations(doc, payload);
             snapshot = snapshotDocument(doc);
           },
         );

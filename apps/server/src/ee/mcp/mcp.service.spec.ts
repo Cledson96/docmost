@@ -3,6 +3,7 @@ import { McpService } from './mcp.service';
 import { RichContentCapabilitiesService } from './rich-content/rich-content-capabilities.service';
 import { ContentReaderService } from './rich-content/content-reader.service';
 import { richContentCapabilities } from '../../core/rich-content/rich-content-capabilities';
+import { BlockEditService } from './rich-content/block-edit.service';
 
 const user = { id: 'user-1' } as any;
 const workspace = { id: 'workspace-1' } as any;
@@ -73,6 +74,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
         content: page.content,
       }),
     },
+    blockEditService: { edit: jest.fn().mockResolvedValue({ pageId: 'page-1', revision: 'revision-2' }) },
     ...overrides,
   };
 
@@ -107,6 +109,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       'richContentCapabilitiesService',
       'contentReaderService',
       'collaborationGateway',
+      'blockEditService',
     ].map((key) => deps[key]) as ConstructorParameters<typeof McpService>),
   );
 
@@ -122,6 +125,19 @@ function callTool(service: McpService, name: string, args: any) {
 }
 
 describe('McpService permissions', () => {
+  it('dispatches edit_page_blocks with the authenticated API-key owner and preserves tool errors', async () => {
+    const { service, deps } = buildService();
+    const args = { pageId: 'page-1', expectedRevision: 'revision-1', operations: [] };
+
+    const result: any = await callTool(service, 'edit_page_blocks', args);
+    expect(JSON.parse(result.result.content[0].text)).toEqual({ pageId: 'page-1', revision: 'revision-2' });
+    expect(deps.blockEditService.edit).toHaveBeenCalledWith(args, user, workspace);
+
+    deps.blockEditService.edit.mockRejectedValueOnce(Object.assign(new Error('The page revision is stale'), { code: 'STALE_REVISION' }));
+    const error: any = await callTool(service, 'edit_page_blocks', args);
+    expect(error.result).toMatchObject({ isError: true });
+    expect(error.result.content[0].text).toContain('STALE_REVISION: The page revision is stale');
+  });
   it('get_page rejects a page the user cannot view', async () => {
     const { service, deps } = buildService();
     deps.pageAccessService.validateCanView.mockRejectedValue(
