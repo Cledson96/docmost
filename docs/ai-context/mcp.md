@@ -31,7 +31,7 @@
 - `get_comment` valida acesso à página do comentário antes de devolvê-lo, seguindo o mesmo padrão das demais ferramentas de página.
 - O endpoint MCP tem rate limiting por usuário; não presuma que uma nova ferramenta ou rota fica de fora desse limite.
 - O formato padrão de conteúdo de página é Markdown; `get_page` também aceita HTML ou JSON ProseMirror. Atualizações de página recebem Markdown e usam `append` por padrão.
-- Após autorizar a leitura, `get_page` obtém o snapshot atual via `CollaborationGateway.handleYjsEvent('getPageSnapshot', pageId, { user })`. A resposta inclui a revisão e blocos estruturados de `ee/mcp/rich-content/content-reader.service.ts`; o Markdown usa o codec Agent Markdown do snapshot, enquanto HTML e JSON preservam a renderização do conteúdo persistido.
+- Após autorizar a leitura, `get_page` obtém o snapshot atual via `CollaborationGateway.handleYjsEvent('getPageSnapshot', 'page.' + pageId, { user })`. A resposta inclui a revisão e blocos estruturados de `ee/mcp/rich-content/content-reader.service.ts`; o Markdown usa o codec Agent Markdown do snapshot, enquanto HTML e JSON preservam a renderização do conteúdo persistido.
 - Cada bloco MCP corresponde a um nó público registrado do schema TipTap (inclusive nós inline), em ordem de documento. Ele mantém o `id` persistido quando houver; conteúdo legado recebe o locator somente de leitura `legacy:<revision>:<path>`, sem a atribuição de IDs. Estruturas internas, como `doc`, `text` e `listItem`, não são blocos próprios.
 - Upload de anexo por MCP aceita no máximo 2 MiB de bytes antes de base64. Exports que geram ZIP, como uma página com filhos ou anexos, não podem ser devolvidos pelo MCP.
 

@@ -1373,7 +1373,7 @@ export class McpService {
         const format = args.format || 'markdown';
         const snapshot = await this.collaborationGateway.handleYjsEvent(
           'getPageSnapshot',
-          page.id,
+          `page.${page.id}`,
           { user },
         );
         const richContent = this.contentReaderService.read(snapshot);

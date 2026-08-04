@@ -770,7 +770,7 @@ describe('McpService permissions', () => {
     expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
     expect(deps.collaborationGateway.handleYjsEvent).toHaveBeenCalledWith(
       'getPageSnapshot',
-      'page-1',
+      'page.page-1',
       { user },
     );
     expect(body).toEqual(expect.objectContaining({ revision: 'revision-current' }));
