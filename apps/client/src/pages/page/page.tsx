@@ -1,8 +1,6 @@
 import { useParams } from "react-router-dom";
 import { usePageQuery } from "@/features/page/queries/page-query";
-import { FullEditor } from "@/features/editor/full-editor";
 import { TitleEditor } from "@/features/editor/title-editor";
-import HistoryModal from "@/features/page-history/components/history-modal";
 import { Helmet } from "react-helmet-async";
 import PageHeader from "@/features/page/components/header/page-header.tsx";
 import { extractPageSlugId } from "@/lib";
@@ -18,10 +16,19 @@ import { BaseView } from "@/ee/base/components/base-view";
 import { useHasFeature } from "@/ee/hooks/use-feature";
 import { Feature } from "@/ee/features";
 import { getPageTitle } from "@/features/page/page.utils";
-const MemoizedFullEditor = React.memo(FullEditor);
+
+const LazyFullEditor = React.lazy(async () => {
+  const { FullEditor } = await import("@/features/editor/full-editor");
+
+  return { default: FullEditor };
+});
+const LazyHistoryModal = React.lazy(
+  () => import("@/features/page-history/components/history-modal"),
+);
+const MemoizedFullEditor = React.memo(LazyFullEditor);
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
-const MemoizedHistoryModal = React.memo(HistoryModal);
+const MemoizedHistoryModal = React.memo(LazyHistoryModal);
 
 export default function Page() {
   const { t } = useTranslation();
@@ -165,19 +172,27 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
 
         <MemoizedPageHeader readOnly={!canEdit} />
 
-        <MemoizedFullEditor
-          key={page.id}
-          pageId={page.id}
-          title={page.title}
-          content={page.content}
-          slugId={page.slugId}
-          spaceSlug={page?.space?.slug}
-          editable={canEdit}
-          creator={page.creator}
-          contributors={page.contributors}
-          canComment={canComment}
-        />
-        <MemoizedHistoryModal pageId={page.id} />
+        <React.Suspense
+          fallback={
+            <div aria-label={t("Loading page content")}>
+              {t("Loading page content")}
+            </div>
+          }
+        >
+          <MemoizedFullEditor
+            key={page.id}
+            pageId={page.id}
+            title={page.title}
+            content={page.content}
+            slugId={page.slugId}
+            spaceSlug={page?.space?.slug}
+            editable={canEdit}
+            creator={page.creator}
+            contributors={page.contributors}
+            canComment={canComment}
+          />
+          <MemoizedHistoryModal pageId={page.id} />
+        </React.Suspense>
       </div>
     )
   );
