@@ -64,6 +64,41 @@ describe('agent markdown', () => {
     expect(await agentMarkdownToProsemirror(markdown, tiptapExtensions)).toMatchObject(doc);
   });
 
+  it('restores inline directives adjacent to ordinary text', async () => {
+    const mention = Buffer.from(JSON.stringify({
+      id: 'm-1',
+      attrs: {
+        id: 'm-1',
+        label: 'Ada',
+        entityType: 'user',
+        entityId: 'user-1',
+        slugId: null,
+        creatorId: 'user-2',
+        anchorId: null,
+      },
+    })).toString('base64url');
+    const status = Buffer.from(JSON.stringify({
+      id: null,
+      attrs: { text: 'In progress', color: 'blue' },
+    })).toString('base64url');
+
+    await expect(agentMarkdownToProsemirror(
+      `Owner: {{docmost:mention ${mention}}} {{docmost:status ${status}}}`,
+      tiptapExtensions,
+    )).resolves.toMatchObject({
+      type: 'doc',
+      content: [{
+        type: 'paragraph',
+        content: [
+          { type: 'text', text: 'Owner: ' },
+          { type: 'mention', attrs: { id: 'm-1', label: 'Ada' } },
+          { type: 'text', text: ' ' },
+          { type: 'status', attrs: { text: 'In progress', color: 'blue' } },
+        ],
+      }],
+    });
+  });
+
   it('keeps ordinary Markdown semantic after a round trip', async () => {
     const markdown = '# Title\n\n- one\n- two\n\n**bold** and [link](https://example.com)';
     const doc = await agentMarkdownToProsemirror(markdown, tiptapExtensions);
@@ -76,6 +111,7 @@ describe('agent markdown', () => {
     [':::docmost-embed\nid: [not valid\nattrs: {}\n:::', 'INVALID_YAML'],
     ['{{docmost:mention nope}}', 'INVALID_BASE64URL'],
     ['{{docmost:embed eyJpZCI6bnVsbCwiYXR0cnMiOnt9fQ}}', 'INLINE_TYPE_INCOMPATIBLE'],
+    [':::docmost-subpages\nid: null\nattrs: {}\n---\n:::docmost-embed\nid: null\nattrs: {}\n:::', 'INVALID_DIRECTIVE'],
   ])('rejects invalid agent markdown: %s', async (markdown, code) => {
     await expect(agentMarkdownToProsemirror(markdown, tiptapExtensions)).rejects.toMatchObject({
       name: AgentMarkdownError.name,

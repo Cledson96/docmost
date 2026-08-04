@@ -1,5 +1,5 @@
 import { getSchema } from '@tiptap/core';
-import { uniqueIdNodeTypes } from '@docmost/editor-ext';
+import { agentMarkdownSyntaxFor, uniqueIdNodeTypes } from '@docmost/editor-ext';
 import {
   agentAddressableNodeTypes,
   richContentCapabilities,
@@ -91,6 +91,14 @@ describe('rich content capabilities', () => {
       expect(capability).toBeDefined();
       expect(capability?.category).toBe('node');
       expect(capability?.blockAddressable).toBe(true);
+    }
+  });
+
+  it('uses the shared Agent Markdown syntax classification', () => {
+    for (const capability of richContentCapabilities) {
+      expect(capability.agentMarkdownSyntax).toBe(
+        agentMarkdownSyntaxFor(capability.name),
+      );
     }
   });
 

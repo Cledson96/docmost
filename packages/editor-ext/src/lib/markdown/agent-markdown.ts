@@ -5,35 +5,11 @@ import { Node } from "@tiptap/pm/model";
 import { dump, JSON_SCHEMA, load } from "js-yaml";
 import { markdownToHtml } from "./utils/marked.utils";
 import { htmlToMarkdown } from "./utils/turndown.utils";
-
-const inlineNodeTypes = new Set(["mention", "status", "mathInline"]);
-const inlineMarkTypes = new Set([
-  "underline",
-  "superscript",
-  "subscript",
-  "highlight",
-  "textStyle",
-]);
-const standardNodeTypes = new Set([
-  "doc",
-  "text",
-  "paragraph",
-  "heading",
-  "blockquote",
-  "bulletList",
-  "orderedList",
-  "listItem",
-  "taskList",
-  "taskItem",
-  "codeBlock",
-  "hardBreak",
-  "horizontalRule",
-  "table",
-  "tableRow",
-  "tableCell",
-  "tableHeader",
-]);
-const standardMarkTypes = new Set(["bold", "italic", "strike", "code", "link"]);
+import {
+  agentMarkdownInlineMarkTypes,
+  agentMarkdownInlineNodeTypes,
+  agentMarkdownStandardNodeTypes,
+} from "./agent-markdown-syntax";
 
 export type AgentMarkdownErrorCode =
   | "UNKNOWN_TYPE"
@@ -68,13 +44,13 @@ export function prosemirrorToAgentMarkdown(doc: JSONContent, extensions: Extensi
       replacements.push({ token: value, content: node });
       return { type: "paragraph", content: [{ type: "text", text: value }] };
     }
-    if (inlineNodeTypes.has(node.type ?? "")) {
+    if (agentMarkdownInlineNodeTypes.has(node.type ?? "")) {
       const value = token();
       replacements.push({ token: value, content: node });
       return { type: "text", text: value };
     }
-    if (node.type === "text" && node.marks?.some((mark) => inlineMarkTypes.has(mark.type))) {
-      const richMark = node.marks.find((mark) => inlineMarkTypes.has(mark.type))!;
+    if (node.type === "text" && node.marks?.some((mark) => agentMarkdownInlineMarkTypes.has(mark.type))) {
+      const richMark = node.marks.find((mark) => agentMarkdownInlineMarkTypes.has(mark.type))!;
       const value = token();
       replacements.push({ token: value, content: node });
       return { type: "text", text: value };
@@ -116,21 +92,26 @@ export async function agentMarkdownToProsemirror(markdown: string, extensions: E
 
 function isRichBlock(node: JSONContent) {
   if (!node.type || node.type === "doc" || node.type === "text") return false;
-  if (!standardNodeTypes.has(node.type)) return true;
+  if (!agentMarkdownStandardNodeTypes.has(node.type)) return true;
   if (node.type === "paragraph") return node.attrs?.id != null || node.attrs?.textAlign != null || (node.attrs?.indent ?? 0) !== 0;
   if (node.type === "heading") return node.attrs?.id != null || node.attrs?.textAlign != null || (node.attrs?.indent ?? 0) !== 0;
   return false;
 }
 
 function serializeReplacement(node: JSONContent, extensions: Extensions): string {
-  if (inlineNodeTypes.has(node.type ?? "")) return inlineDirective(node);
-  if (node.type === "text" && node.marks?.some((mark) => inlineMarkTypes.has(mark.type))) {
-    const mark = node.marks.find((candidate) => inlineMarkTypes.has(candidate.type))!;
+  if (agentMarkdownInlineNodeTypes.has(node.type ?? "")) return inlineDirective(node);
+  if (node.type === "text" && node.marks?.some((mark) => agentMarkdownInlineMarkTypes.has(mark.type))) {
+    const mark = node.marks.find((candidate) => agentMarkdownInlineMarkTypes.has(candidate.type))!;
     const payload = encode({ id: null, attrs: mark.attrs ?? {} });
     return `{{docmost:${mark.type} ${payload}}}${node.text ?? ""}{{/docmost:${mark.type}}}`;
   }
   const body = node.content?.length
-    ? prosemirrorToAgentMarkdown({ type: "doc", content: node.content }, extensions)
+    ? prosemirrorToAgentMarkdown({
+      type: "doc",
+      content: node.type === "paragraph" || node.type === "heading"
+        ? [{ type: "paragraph", content: node.content }]
+        : node.content,
+    }, extensions)
     : "";
   const metadata = dump({ id: node.attrs?.id ?? null, attrs: node.attrs ?? {} }, { noRefs: true, lineWidth: -1 }).trimEnd();
   return `:::docmost-${node.type}\n${metadata}${body ? `\n---\n${body}` : ""}\n:::`;
@@ -169,8 +150,11 @@ async function blockFromDirective(type: string, metadata: string, body: string, 
   const attrs = { ...data.attrs, ...(data.id === null ? {} : { id: data.id }) };
   if (!body) return { type, attrs };
   const parsed = await agentMarkdownToProsemirror(body, extensions);
-  const content = (type === "paragraph" || type === "heading")
-    ? parsed.content?.[0]?.content
+  const content = type === "paragraph" || type === "heading"
+    ? parsed.content?.flatMap((child, index) => [
+      ...(index ? [{ type: "text", text: " " }] : []),
+      ...(child.content ?? []),
+    ])
     : parsed.content;
   return { type, attrs, content };
 }
@@ -192,9 +176,9 @@ function replaceInline(markdown: string, extensions: Extensions, register: (cont
 
 function restoreTokens(node: JSONContent, replacements: Replacement[]): JSONContent {
   const blockToken = node.content?.length === 1 && node.content[0].type === "text"
-    ? replacements.find((candidate) => candidate.token === node.content?.[0].text && !inlineNodeTypes.has(candidate.content.type ?? "") && candidate.content.type !== "text")
+    ? replacements.find((candidate) => candidate.token === node.content?.[0].text && !agentMarkdownInlineNodeTypes.has(candidate.content.type ?? "") && candidate.content.type !== "text")
     : undefined;
-  if (blockToken) return blockToken.content;
+  if (blockToken) return restoreTokens(blockToken.content, replacements);
   if (node.type === "text") {
     const replacement = replacements.find((candidate) => candidate.token === node.text);
     return replacement ? replacement.content : node;
@@ -209,7 +193,24 @@ function restoreTokens(node: JSONContent, replacements: Replacement[]): JSONCont
       return replacement ?? { content: { ...child, text: part } };
     }).map((value) => "content" in value ? value.content : value);
   });
-  return { ...node, content };
+  return { ...node, content: mergeAdjacentTextNodes(content) };
+}
+
+function mergeAdjacentTextNodes(content: JSONContent[] | undefined) {
+  if (!content) return content;
+  return content.reduce<JSONContent[]>((merged, node) => {
+    const previous = merged.at(-1);
+    if (
+      previous?.type === "text" &&
+      node.type === "text" &&
+      JSON.stringify(previous.marks ?? []) === JSON.stringify(node.marks ?? [])
+    ) {
+      previous.text = `${previous.text ?? ""}${node.text ?? ""}`;
+    } else {
+      merged.push(node);
+    }
+    return merged;
+  }, []);
 }
 
 function parseYaml(value: string): DirectiveData {
@@ -236,12 +237,12 @@ function decode(value: string): DirectiveData {
 
 function assertBlockType(type: string, extensions: Extensions) {
   if (!getSchema(extensions).nodes[type]) throw error("UNKNOWN_TYPE", `Unknown Docmost node type: ${type}.`);
-  if (inlineNodeTypes.has(type) || inlineMarkTypes.has(type)) throw error("INLINE_TYPE_INCOMPATIBLE", `${type} must use an inline directive.`);
+  if (agentMarkdownInlineNodeTypes.has(type) || agentMarkdownInlineMarkTypes.has(type)) throw error("INLINE_TYPE_INCOMPATIBLE", `${type} must use an inline directive.`);
 }
 function assertInlineType(type: string, extensions: Extensions, paired: boolean) {
   const schema = getSchema(extensions);
   if (!schema.nodes[type] && !schema.marks[type]) throw error("UNKNOWN_TYPE", `Unknown Docmost inline type: ${type}.`);
-  if (paired ? !inlineMarkTypes.has(type) : !inlineNodeTypes.has(type)) throw error("INLINE_TYPE_INCOMPATIBLE", `Invalid inline directive type: ${type}.`);
+  if (paired ? !agentMarkdownInlineMarkTypes.has(type) : !agentMarkdownInlineNodeTypes.has(type)) throw error("INLINE_TYPE_INCOMPATIBLE", `Invalid inline directive type: ${type}.`);
 }
 function validateDocument(doc: JSONContent, extensions: Extensions) {
   try { Node.fromJSON(getSchema(extensions), doc); } catch (cause) { throw error("INVALID_CONTENT", "Content does not satisfy the configured TipTap schema.", cause); }
