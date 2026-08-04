@@ -8,6 +8,8 @@ import {
 import { setYjsMark, updateYjsMarkAttribute, YjsSelection } from './yjs.util';
 import * as Y from 'yjs';
 import { User } from '@docmost/db/types/entity.types';
+import { snapshotDocument } from './rich-content/rich-content-yjs.util';
+import type { RichContentSnapshot } from './rich-content/rich-content.types';
 
 export type CollabEventHandlers = ReturnType<
   CollaborationHandler['getHandlers']
@@ -27,6 +29,23 @@ export class CollaborationHandler {
         // await this.withYdocConnection(hocuspocus, documentName, {}, (doc) => {
         //   const fragment = doc.getXmlFragment('default');
         //});
+      },
+      getPageSnapshot: async (
+        documentName: string,
+        payload: { user: User },
+      ): Promise<RichContentSnapshot> => {
+        let snapshot: RichContentSnapshot;
+
+        await this.withYdocConnection(
+          hocuspocus,
+          documentName,
+          { user: payload.user },
+          (doc) => {
+            snapshot = snapshotDocument(doc);
+          },
+        );
+
+        return snapshot!;
       },
       setCommentMark: async (
         documentName: string,

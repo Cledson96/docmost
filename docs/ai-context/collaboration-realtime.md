@@ -10,6 +10,7 @@
 
 - `PersistenceExtension` carrega primeiro o estado Yjs salvo; sem ele, converte o JSON da página. Ao persistir, atualiza JSON ProseMirror, texto, estado Yjs, contribuidores e último editor.
 - A persistência é debounce de 10 segundos, com espera máxima de 45 segundos. Backlinks, menções, indexação de IA, watchers, notificações e histórico são efeitos posteriores, frequentemente enfileirados.
+- Leituras de conteúdo para integrações devem abrir o documento Yjs vivo com `CollaborationHandler.withYdocConnection`; `getPageSnapshot` retorna o JSON TipTap atual e uma revisão opaca SHA-256/base64url do state vector. O `CollaborationGateway` encaminha eventos customizados pelo Redis quando habilitado e os executa no handler local quando `COLLAB_DISABLE_REDIS` estiver ativo.
 - O estado em IndexedDB do client melhora uso offline/local, mas não substitui autorização ou o estado do servidor.
 - `packages/editor-ext/src/lib/unique-id/unique-id-node-types.ts` é a fonte compartilhada dos tipos TipTap com `UniqueID` persistente, consumida por todos os editores client/read-only e pelo servidor. `agentAddressableNodeTypes` em `apps/server/src/core/rich-content/rich-content-capabilities.ts` a filtra para nós `blockAddressable`, e `apps/server/src/collaboration/collaboration.util.ts` usa esse resultado.
 
