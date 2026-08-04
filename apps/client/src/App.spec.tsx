@@ -54,6 +54,25 @@ vi.mock("@/features/editor/title-editor", () => ({
 vi.mock("@/features/editor/full-editor", () => ({
   FullEditor: () => <div data-testid="full-editor" />,
 }));
+vi.mock("@/features/editor/readonly-page-editor.tsx", () => ({
+  default: () => <div data-testid="readonly-page-editor" />,
+}));
+vi.mock("@/features/share/queries/share-query.ts", () => ({
+  useSharePageQuery: () => ({
+    data: {
+      page: { id: "shared-page-id", title: "Shared page", content: {} },
+      share: { id: "share-id", key: "share-key", searchIndexing: false },
+      features: [],
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+vi.mock("@/features/share/components/share-layout.tsx", async () => {
+  const { Outlet } = await import("react-router-dom");
+
+  return { default: () => <Outlet /> };
+});
 vi.mock("@/features/page-history/components/history-modal", () => ({
   default: () => null,
 }));
@@ -123,4 +142,18 @@ it("loads the full editor for a resolved workspace page route", async () => {
   );
 
   expect(await screen.findByTestId("full-editor")).toBeInTheDocument();
+});
+
+it("loads the readonly editor for a shared page route", async () => {
+  render(
+    <MemoryRouter initialEntries={["/share/share-key/p/shared-page-slug"]}>
+      <MantineProvider>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </MantineProvider>
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByTestId("readonly-page-editor")).toBeInTheDocument();
 });

@@ -4,7 +4,6 @@ import { useTranslation } from "react-i18next";
 import { useSharePageQuery } from "@/features/share/queries/share-query.ts";
 import { Container } from "@mantine/core";
 import React, { useEffect } from "react";
-import ReadonlyPageEditor from "@/features/editor/readonly-page-editor.tsx";
 import { extractPageSlugId } from "@/lib";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import ShareBranding from "@/features/share/components/share-branding.tsx";
@@ -14,6 +13,10 @@ import {
   sharedTreeDataAtom,
 } from "@/features/share/atoms/shared-page-atom.ts";
 import { isPageInTree } from "@/features/share/utils.ts";
+
+const ReadonlyPageEditor = React.lazy(
+  () => import("@/features/editor/readonly-page-editor.tsx"),
+);
 
 export default function SharedPage() {
   const { t } = useTranslation();
@@ -64,13 +67,17 @@ export default function SharedPage() {
       </Helmet>
 
       <Container fluid={fullWidth} size={fullWidth ? undefined : 900} p={0}>
-        <ReadonlyPageEditor
-          key={data.page.id}
-          title={data.page.title}
-          content={data.page.content}
-          pageId={data.page.id}
-          shareId={data.share.id}
-        />
+        <React.Suspense
+          fallback={<div role="status" aria-label={t("Loading page content")} />}
+        >
+          <ReadonlyPageEditor
+            key={data.page.id}
+            title={data.page.title}
+            content={data.page.content}
+            pageId={data.page.id}
+            shareId={data.share.id}
+          />
+        </React.Suspense>
       </Container>
 
       {data && !shareId && !(data.features?.length > 0) && <ShareBranding />}
