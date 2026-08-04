@@ -182,15 +182,20 @@ function replaceInline(markdown: string, extensions: Extensions, register: (cont
   });
 }
 
-type MarkdownFence = { marker: "`" | "~"; length: number };
+type MarkdownFence =
+  | { kind: "fence"; marker: "`" | "~"; length: number }
+  | { kind: "indented" };
 
 function updateMarkdownFence(line: string, activeFence: MarkdownFence | undefined): MarkdownFence | undefined {
+  const content = line.replace(/^(?: {0,3}>[ \t]?)+/, "");
   if (activeFence) {
-    const closing = new RegExp(`^ {0,3}${activeFence.marker}{${activeFence.length},}[ \\t]*$`);
-    return closing.test(line) ? undefined : activeFence;
+    if (activeFence.kind === "indented") return /^(?: {4}|\t)|^\s*$/.test(content) ? activeFence : undefined;
+    const closing = new RegExp(`^[ \\t]*${activeFence.marker}{${activeFence.length},}[ \\t]*$`);
+    return closing.test(content) ? undefined : activeFence;
   }
-  const opening = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
-  return opening ? { marker: opening[0] as MarkdownFence["marker"], length: opening.length } : undefined;
+  if (/^(?: {4}|\t)/.test(content)) return { kind: "indented" };
+  const opening = /^[ \t]*(`{3,}|~{3,})/.exec(content)?.[1];
+  return opening ? { kind: "fence", marker: opening[0] as "`" | "~", length: opening.length } : undefined;
 }
 
 function transformOutsideMarkdownFences(markdown: string, transform: (value: string) => string) {
@@ -207,6 +212,11 @@ function transformOutsideMarkdownFences(markdown: string, transform: (value: str
     const line = lines[index];
     const newline = lines[index + 1] ?? "";
     const nextFence = updateMarkdownFence(line, fence);
+    if (fence?.kind === "indented" && !nextFence) {
+      fence = undefined;
+      outsideFence += line + newline;
+      continue;
+    }
     if (fence || nextFence) {
       flush();
       output.push(line, newline);

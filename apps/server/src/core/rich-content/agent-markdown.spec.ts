@@ -143,6 +143,34 @@ describe('agent markdown', () => {
   });
 
   it.each([
+    ['a blockquote', '> ```yaml\n> :::docmost-subpages\n> id: null\n> attrs: {}\n> :::\n> ```'],
+    ['a list item', '- example\n\n    ```yaml\n    :::docmost-subpages\n    id: null\n    attrs: {}\n    :::\n    ```'],
+    ['an indented code block', '    :::docmost-subpages\n    id: null\n    attrs: {}\n    :::'],
+  ])('keeps block directives literal inside code in %s', async (_context, markdown) => {
+    const doc = await agentMarkdownToProsemirror(markdown, tiptapExtensions);
+
+    expect(prosemirrorToAgentMarkdown(doc, tiptapExtensions)).toContain(':::docmost-subpages');
+  });
+
+  it.each([
+    ['a blockquote', '> ```text\n> {{docmost:unknown nope}}\n> ```'],
+    ['a list item', '- example\n\n    ```text\n    {{docmost:unknown nope}}\n    ```'],
+    ['an indented code block', '    {{docmost:unknown nope}}'],
+  ])('keeps inline directives literal inside code in %s', async (_context, markdown) => {
+    const doc = await agentMarkdownToProsemirror(markdown, tiptapExtensions);
+
+    expect(prosemirrorToAgentMarkdown(doc, tiptapExtensions)).toContain('{{docmost:unknown nope}}');
+  });
+
+  it('keeps directives literal when an outer fence uses a longer delimiter', async () => {
+    const markdown = '> ````text\n> {{docmost:unknown nope}}\n> ```\n> :::docmost-subpages\n> id: null\n> attrs: {}\n> :::\n> ````';
+
+    const doc = await agentMarkdownToProsemirror(markdown, tiptapExtensions);
+
+    expect(prosemirrorToAgentMarkdown(doc, tiptapExtensions)).toContain('> {{docmost:unknown nope}}\n> ```\n> :::docmost-subpages');
+  });
+
+  it.each([
     [':::docmost-unknown\nid: null\nattrs: {}\n:::', 'UNKNOWN_TYPE'],
     [':::docmost-embed\nid: [not valid\nattrs: {}\n:::', 'INVALID_YAML'],
     ['{{docmost:mention nope}}', 'INVALID_BASE64URL'],
