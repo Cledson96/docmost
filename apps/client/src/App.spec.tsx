@@ -23,6 +23,9 @@ vi.mock("@/features/workspace/queries/workspace-query.ts", () => ({
   }),
 }));
 vi.mock("@/ee/components/sso-login.tsx", () => ({ default: () => null }));
+vi.mock("@/pages/auth/login", () => ({
+  default: () => <h1>Login</h1>,
+}));
 vi.mock("@/components/layouts/global/layout.tsx", async () => {
   const { Outlet } = await import("react-router-dom");
 
