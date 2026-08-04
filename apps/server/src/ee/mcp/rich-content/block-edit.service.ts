@@ -129,17 +129,22 @@ export class BlockEditService {
     workspace: Workspace,
   ) {
     const pageIds = new Set<string>();
-    const collect = (node: unknown) => {
-      if (!this.isRecord(node)) return;
-      const attrs = this.isRecord(node.attrs) ? node.attrs : {};
-      if (typeof attrs.pageId === 'string') pageIds.add(attrs.pageId);
-      if (typeof attrs.sourcePageId === 'string') pageIds.add(attrs.sourcePageId);
-      if (attrs.entityType === 'page' && typeof attrs.entityId === 'string') pageIds.add(attrs.entityId);
-      if (Array.isArray(node.content)) node.content.forEach(collect);
+    const collect = (value: unknown) => {
+      if (Array.isArray(value)) {
+        value.forEach(collect);
+        return;
+      }
+      if (!this.isRecord(value)) return;
+      if (typeof value.pageId === 'string') pageIds.add(value.pageId);
+      if (typeof value.sourcePageId === 'string') pageIds.add(value.sourcePageId);
+      if (value.entityType === 'page' && typeof value.entityId === 'string') {
+        pageIds.add(value.entityId);
+      }
+      Object.values(value).forEach(collect);
     };
     operations.forEach((operation) => {
-      if (Array.isArray(operation.content)) operation.content.forEach(collect);
-      else collect(operation.content);
+      collect(operation.attrs);
+      collect(operation.content);
     });
 
     for (const pageId of pageIds) {
