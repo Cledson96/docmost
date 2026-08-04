@@ -287,6 +287,8 @@ describe('rich content capabilities', () => {
     ['excalidraw', 'height', 'number', undefined],
     ['embed', 'width', 'number', undefined],
     ['embed', 'height', 'number', undefined],
+    ['youtube', 'width', 'number', undefined],
+    ['youtube', 'height', 'number', undefined],
   ])(
     'describes %s.%s dimensions faithfully',
     (capabilityName, attributeName, type, format) => {
@@ -298,6 +300,14 @@ describe('rich content capabilities', () => {
       expect(attribute?.format).toBe(format);
     },
   );
+
+  it('describes YouTube start as seconds', () => {
+    const start = richContentCapabilities
+      .find((capability) => capability.name === 'youtube')
+      ?.attributes.find((attribute) => attribute.name === 'start');
+
+    expect(start).toMatchObject({ type: 'integer', format: 'seconds' });
+  });
 
   it('registers every agent-addressable type as a schema node, never a mark', () => {
     const schema = getSchema(tiptapExtensions);

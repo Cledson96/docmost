@@ -461,9 +461,14 @@ export const richContentCapabilities = [
     blockAddressable: false,
     attributes: [
       { name: 'src', description: 'YouTube URL.', required: true },
-      { name: 'width', description: 'Embed width.' },
-      { name: 'height', description: 'Embed height.' },
-      { name: 'start', description: 'Playback start time in seconds.' },
+      { name: 'width', description: 'Embed width.', type: 'number' },
+      { name: 'height', description: 'Embed height.', type: 'number' },
+      {
+        name: 'start',
+        description: 'Playback start time in seconds.',
+        type: 'integer',
+        format: 'seconds',
+      },
     ],
   }),
 ] as const satisfies readonly RichContentCapability[];
