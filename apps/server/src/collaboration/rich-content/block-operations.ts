@@ -27,6 +27,13 @@ export function applyBlockOperations(doc: Y.Doc, input: ApplyBlockOperationsInpu
   if (input.expectedRevision && input.expectedRevision !== revisionForDocument(doc)) {
     throw new BlockOperationError('STALE_REVISION', 'The page revision is stale');
   }
+  const revision = revisionForDocument(doc);
+  for (const operation of input.operations) {
+    for (const locator of [operation.target, ...(operation.type === 'move' ? [operation.destination] : [])]) {
+      const match = /^legacy:([^:]+):/.exec(locator);
+      if (match && match[1] !== revision) throw new BlockOperationError('STALE_REVISION', 'The legacy block locator is stale');
+    }
+  }
   validateBatch(doc, input.operations);
   // Preflight in an isolated Y.Doc: a rejected later operation never changes the live document.
   const trial = new Y.Doc();
@@ -113,6 +120,14 @@ function validateBatch(doc: Y.Doc, operations: BlockOperation[]) {
 }
 
 function validateNode(content: JSONContent, ids: Set<string>) {
+  if (content.type === 'text') {
+    if (typeof content.text !== 'string') throw new BlockOperationError('INVALID_BLOCK_SCHEMA', 'Text nodes require text');
+    for (const mark of content.marks ?? []) {
+      const capability = capabilities.get(mark.type);
+      if (!capability || capability.category !== 'mark') throw new BlockOperationError('INVALID_BLOCK_SCHEMA', `Unsupported mark '${mark.type}'`);
+    }
+    return;
+  }
   const capability = content.type ? capabilities.get(content.type) : undefined;
   if (!capability || content.type === 'doc') throw new BlockOperationError('INVALID_BLOCK_SCHEMA', `Unsupported block type '${content.type ?? ''}'`);
   const attributes = content.attrs ?? {};
@@ -154,8 +169,10 @@ function canContainBlocks(node: Y.XmlElement): boolean {
 }
 
 function locate(parent: Y.XmlFragment | Y.XmlElement, locator: string, path: number[] = []): Located | undefined {
+  const legacy = /^legacy:([^:]+):(.+)$/.exec(locator);
   for (const [index, node] of parent.toArray().entries()) {
-    if (node instanceof Y.XmlElement && (node.getAttribute('id') === locator || locator === `legacy:${path.concat(index).join('.')}`)) return { node, parent, index };
+    const currentPath = path.concat(index).join('.');
+    if (node instanceof Y.XmlElement && (node.getAttribute('id') === locator || (legacy?.[2] === currentPath && !node.getAttribute('id')))) return { node, parent, index };
     if (node instanceof Y.XmlElement) {
       const nested = locate(node, locator, path.concat(index));
       if (nested) return nested;
