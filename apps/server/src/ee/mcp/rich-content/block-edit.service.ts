@@ -9,6 +9,7 @@ import { tiptapExtensions } from '../../../collaboration/collaboration.util';
 import type { BlockOperation } from '../../../collaboration/rich-content/block-operations';
 
 const MAX_OPERATIONS = 50;
+const MAX_AGENT_MARKDOWN_LENGTH = 1_000_000;
 
 export class BlockEditRequestError extends Error {
   constructor(
@@ -114,6 +115,9 @@ export class BlockEditService {
     if (type === 'delete') return operation;
 
     if (typeof operation.content !== 'string') this.invalid('Operation content must be Agent Markdown');
+    if (operation.content.length > MAX_AGENT_MARKDOWN_LENGTH) {
+      this.invalid(`Operation content cannot exceed ${MAX_AGENT_MARKDOWN_LENGTH} characters`);
+    }
     const content = await agentMarkdownToProsemirror(operation.content, tiptapExtensions);
     if (type === 'replaceRange') {
       if (!Number.isInteger(operation.from) || !Number.isInteger(operation.to)) this.invalid('replaceRange requires integer from and to');

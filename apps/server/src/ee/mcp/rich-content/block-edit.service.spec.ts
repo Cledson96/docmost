@@ -102,4 +102,28 @@ describe('BlockEditService', () => {
     await expect(service.edit(input as any, user, workspace)).rejects.toMatchObject({ code });
     expect(deps.collaborationGateway.handleYjsEvent).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['another workspace', { ...page, workspaceId: 'workspace-2' }],
+    ['a deleted page', { ...page, deletedAt: new Date() }],
+    ['a missing page', undefined],
+  ])('does not reveal or dispatch edits for %s', async (_name, foundPage) => {
+    const { service, deps } = buildService();
+    deps.pageRepo.findById.mockResolvedValue(foundPage);
+
+    await expect(service.edit({ pageId: 'page-1', expectedRevision: 'revision-1', operations: [] }, user, workspace)).rejects.toMatchObject({ status: 404 });
+    expect(deps.collaborationGateway.handleYjsEvent).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['a malformed directive', ':::docmost-subpages\nid: bad'],
+    ['an oversized directive', 'x'.repeat(1_000_001)],
+  ])('rejects %s before dispatching', async (_name, content) => {
+    const { service, deps } = buildService();
+    await expect(service.edit({
+      pageId: 'page-1', expectedRevision: 'revision-1',
+      operations: [{ type: 'insertAfter', target: 'block-1', content }],
+    }, user, workspace)).rejects.toBeDefined();
+    expect(deps.collaborationGateway.handleYjsEvent).not.toHaveBeenCalled();
+  });
 });

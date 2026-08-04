@@ -138,6 +138,13 @@ describe('McpService permissions', () => {
       'edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments',
     ]));
 
+    const enabled: any = await service.handleRpcRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' }, user, workspace,
+    );
+    expect(enabled.result.tools.map((tool: any) => tool.name)).toEqual(expect.arrayContaining([
+      'edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments',
+    ]));
+
     const capabilities: any = await service.handleRpcRequest(
       { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_content_capabilities', arguments: {} } },
       user, disabledWorkspace,
@@ -150,6 +157,15 @@ describe('McpService permissions', () => {
     );
     expect(edit.result).toMatchObject({ isError: true });
     expect(deps.blockEditService.edit).not.toHaveBeenCalled();
+
+    const pageResult: any = await service.handleRpcRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_page', arguments: { pageId: 'page-1' } } },
+      user, disabledWorkspace,
+    );
+    const pagePayload = JSON.parse(pageResult.result.content[0].text);
+    expect(pagePayload).not.toHaveProperty('revision');
+    expect(pagePayload).not.toHaveProperty('blocks');
+    expect(deps.collaborationGateway.handleYjsEvent).not.toHaveBeenCalledWith('getPageSnapshot', expect.anything(), expect.anything());
   });
   it('dispatches edit_page_blocks with the authenticated API-key owner and preserves tool errors', async () => {
     const { service, deps } = buildService();
