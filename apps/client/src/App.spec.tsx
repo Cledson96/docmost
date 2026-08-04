@@ -141,7 +141,7 @@ it("loads the full editor for a resolved workspace page route", async () => {
     </MemoryRouter>,
   );
 
-  expect(await screen.findByTestId("full-editor")).toBeInTheDocument();
+  expect(await screen.findByTestId("full-editor")).toBeTruthy();
 });
 
 it("loads the readonly editor for a shared page route", async () => {
@@ -155,5 +155,5 @@ it("loads the readonly editor for a shared page route", async () => {
     </MemoryRouter>,
   );
 
-  expect(await screen.findByTestId("readonly-page-editor")).toBeInTheDocument();
+  expect(await screen.findByTestId("readonly-page-editor")).toBeTruthy();
 });
