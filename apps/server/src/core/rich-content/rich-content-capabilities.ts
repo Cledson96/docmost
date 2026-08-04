@@ -5,6 +5,7 @@ export interface RichContentAttribute {
   description: string;
   required?: boolean;
   validation?: string;
+  transient?: boolean;
 }
 
 export interface RichContentCapability {
@@ -52,16 +53,28 @@ export const richContentCapabilities = [
     attributes: [
       { name: 'url', description: 'Attachment URL.', required: true },
       { name: 'name', description: 'Display file name.' },
+      { name: 'mime', description: 'Attachment MIME type.' },
+      { name: 'size', description: 'Attachment size in bytes.' },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
     ],
   }),
   node('audio', 'Embedded audio player.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'Audio URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'Audio URL.', required: true },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
+      { name: 'size', description: 'Audio size in bytes.' },
+    ],
   }),
   node('base', 'Embedded Docmost base.', {
     blockAddressable: false,
     attributes: [
       { name: 'pageId', description: 'Base page identifier.', required: true },
+      {
+        name: 'pendingKey',
+        description: 'Temporary client key until a base page is created.',
+        transient: true,
+      },
     ],
   }),
   node('blockquote', 'Quoted block.', {
@@ -156,6 +169,8 @@ export const richContentCapabilities = [
   node('mention', 'Mention of a Docmost user or page.', {
     blockAddressable: false,
     attributes: [
+      { name: 'id', description: 'Unique mention identifier.' },
+      { name: 'label', description: 'Mention display label.' },
       {
         name: 'entityType',
         description: 'Mention target type.',
@@ -166,6 +181,9 @@ export const richContentCapabilities = [
         description: 'Mention target identifier.',
         required: true,
       },
+      { name: 'slugId', description: 'Mentioned page slug identifier.' },
+      { name: 'creatorId', description: 'User who created the mention.' },
+      { name: 'anchorId', description: 'Anchor within a mentioned page.' },
     ],
   }),
   node('orderedList', 'Numbered list.', {
