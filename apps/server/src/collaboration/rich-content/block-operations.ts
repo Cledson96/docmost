@@ -1,6 +1,6 @@
 import * as Y from 'yjs';
-import type { JSONContent } from '@tiptap/core';
-import { prosemirrorNodeToYElement } from '../collaboration.util';
+import { getSchema, type JSONContent } from '@tiptap/core';
+import { prosemirrorNodeToYElement, tiptapExtensions } from '../collaboration.util';
 import { revisionForDocument } from './rich-content-yjs.util';
 import { richContentCapabilities } from '../../core/rich-content/rich-content-capabilities';
 
@@ -22,6 +22,7 @@ export class BlockOperationError extends Error {
 
 type Located = { node: Y.XmlElement | Y.XmlText; parent: Y.XmlFragment | Y.XmlElement; index: number };
 const capabilities = new Map(richContentCapabilities.map((item) => [item.name, item]));
+const schema = getSchema(tiptapExtensions);
 
 export function applyBlockOperations(doc: Y.Doc, input: ApplyBlockOperationsInput): void {
   if (input.expectedRevision && input.expectedRevision !== revisionForDocument(doc)) {
@@ -58,6 +59,8 @@ function applyOne(doc: Y.Doc, operation: BlockOperation) {
   }
   if (operation.type === 'replaceRange') {
     if (!(target.node instanceof Y.XmlElement)) throw invalid('Only element blocks can contain a range');
+    const container = target.node;
+    if (!operation.content.every((node) => canContain(node, container))) throw invalid('Only element blocks can contain a range');
     if (!Number.isInteger(operation.from) || !Number.isInteger(operation.to) || operation.from < 0 || operation.to < operation.from || operation.to > target.node.length) throw invalid('Invalid replacement range');
     const nodes = operation.content.map(validateAndConvert);
     target.node.delete(operation.from, operation.to - operation.from);
@@ -75,7 +78,7 @@ function applyOne(doc: Y.Doc, operation: BlockOperation) {
     if (!currentDestination) throw new BlockOperationError('BLOCK_NOT_FOUND', `Block '${operation.destination}' was not found`);
     const position = operation.position ?? 'after';
     if (position === 'in') {
-      if (!(currentDestination.node instanceof Y.XmlElement) || !canContainBlocks(currentDestination.node)) throw invalid('Destination cannot contain blocks');
+      if (!(currentDestination.node instanceof Y.XmlElement) || !canContainYNode(currentDestination.node, node)) throw invalid('Destination cannot contain blocks');
       currentDestination.node.insert(currentDestination.node.length, [node]);
     } else {
       const shifted = sameParent && target.index < destinationIndex ? destinationIndex - 1 : destinationIndex;
@@ -86,7 +89,7 @@ function applyOne(doc: Y.Doc, operation: BlockOperation) {
   }
   const node = validateAndConvert(operation.content);
   if (operation.type === 'insertIn') {
-    if (!(target.node instanceof Y.XmlElement) || !canContainBlocks(target.node)) throw invalid('Target cannot contain blocks');
+    if (!(target.node instanceof Y.XmlElement) || !canContain(operation.content, target.node)) throw invalid('Target cannot contain blocks');
     target.node.insert(target.node.length, [node]);
   } else target.parent.insert(target.index + (operation.type === 'insertAfter' ? 1 : 0), [node]);
 }
@@ -114,6 +117,12 @@ function validateBatch(doc: Y.Doc, operations: BlockOperation[]) {
       for (const [name, value] of Object.entries(operation.attrs)) {
         const attr = capability?.attributes.find((item) => item.name === name);
         if (!attr || (name === 'id' && typeof value !== 'string')) throw new BlockOperationError('INVALID_BLOCK_SCHEMA', `Invalid attribute '${name}'`);
+      }
+      if (typeof operation.attrs.id === 'string') {
+        const currentId = target.node.getAttribute('id');
+        if (currentId) ids.delete(currentId);
+        if (ids.has(operation.attrs.id)) throw new BlockOperationError('DUPLICATE_BLOCK_ID', `Duplicate block id '${operation.attrs.id}'`);
+        ids.add(operation.attrs.id);
       }
     }
   }
@@ -155,7 +164,12 @@ function collectIds(parent: Y.XmlFragment | Y.XmlElement): string[] {
 function cloneYNode(node: Y.XmlElement | Y.XmlText): Y.XmlElement | Y.XmlText {
   if (node instanceof Y.XmlText) {
     const copy = new Y.XmlText();
-    copy.insert(0, node.toString());
+    let index = 0;
+    for (const part of node.toDelta()) {
+      const text = typeof part.insert === 'string' ? part.insert : '';
+      copy.insert(index, text, part.attributes);
+      index += text.length;
+    }
     return copy;
   }
   const copy = new Y.XmlElement(node.nodeName);
@@ -164,8 +178,13 @@ function cloneYNode(node: Y.XmlElement | Y.XmlText): Y.XmlElement | Y.XmlText {
   return copy;
 }
 
-function canContainBlocks(node: Y.XmlElement): boolean {
-  return !['paragraph', 'heading', 'text', 'hardBreak', 'image', 'video', 'embed'].includes(node.nodeName);
+function canContain(content: JSONContent, parent: Y.XmlElement): boolean {
+  const parentType = schema.nodes[parent.nodeName];
+  const childType = content.type ? schema.nodes[content.type] : undefined;
+  return Boolean(parentType && childType && parentType.contentMatch.matchType(childType));
+}
+function canContainYNode(parent: Y.XmlElement, child: Y.XmlElement | Y.XmlText): boolean {
+  return child instanceof Y.XmlText ? canContain({ type: 'text', text: child.toString() }, parent) : canContain({ type: child.nodeName }, parent);
 }
 
 function locate(parent: Y.XmlFragment | Y.XmlElement, locator: string, path: number[] = []): Located | undefined {
