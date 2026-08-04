@@ -60,6 +60,8 @@ import {
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
 import { RichContentCapabilitiesService } from './rich-content/rich-content-capabilities.service';
+import { ContentReaderService } from './rich-content/content-reader.service';
+import { CollaborationGateway } from '../../collaboration/collaboration.gateway';
 
 /**
  * Every revision we've tested against. Our initialize/tools/list/tools/call
@@ -125,6 +127,8 @@ export class McpService {
     private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
     private readonly richContentCapabilitiesService: RichContentCapabilitiesService,
+    private readonly contentReaderService: ContentReaderService,
+    private readonly collaborationGateway: CollaborationGateway,
   ) {}
 
   async handleRpcRequest(body: any, user: User, workspace: Workspace) {
@@ -1367,6 +1371,12 @@ export class McpService {
         await this.pageAccessService.validateCanView(page, user);
 
         const format = args.format || 'markdown';
+        const snapshot = await this.collaborationGateway.handleYjsEvent(
+          'getPageSnapshot',
+          page.id,
+          { user },
+        );
+        const richContent = this.contentReaderService.read(snapshot);
 
         return {
           id: page.id,
@@ -1375,7 +1385,12 @@ export class McpService {
           spaceId: page.spaceId,
           parentPageId: page.parentPageId,
           format,
-          content: this.renderPageContent(page.content, format),
+          content:
+            format === 'markdown'
+              ? richContent.content
+              : this.renderPageContent(page.content, format),
+          revision: richContent.revision,
+          blocks: richContent.blocks,
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         };

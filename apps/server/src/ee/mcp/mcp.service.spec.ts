@@ -1,6 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { McpService } from './mcp.service';
 import { RichContentCapabilitiesService } from './rich-content/rich-content-capabilities.service';
+import { ContentReaderService } from './rich-content/content-reader.service';
 import { richContentCapabilities } from '../../core/rich-content/rich-content-capabilities';
 
 const user = { id: 'user-1' } as any;
@@ -64,6 +65,13 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     wsService: { emitCommentEvent: jest.fn() },
     auditService: { log: jest.fn() },
     richContentCapabilitiesService: new RichContentCapabilitiesService(),
+    contentReaderService: new ContentReaderService(),
+    collaborationGateway: {
+      handleYjsEvent: jest.fn().mockResolvedValue({
+        revision: 'revision-1',
+        content: page.content,
+      }),
+    },
     ...overrides,
   };
 
@@ -95,6 +103,8 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       'wsService',
       'auditService',
       'richContentCapabilitiesService',
+      'contentReaderService',
+      'collaborationGateway',
     ].map((key) => deps[key]) as ConstructorParameters<typeof McpService>),
   );
 
@@ -699,17 +709,22 @@ describe('McpService permissions', () => {
 
   it('get_page returns markdown by default and raw json on request', async () => {
     const { service, deps } = buildService();
+    const currentContent = {
+      type: 'doc',
+      content: [
+        {
+          type: 'paragraph',
+          content: [{ type: 'text', text: 'hello' }],
+        },
+      ],
+    };
     deps.pageRepo.findById.mockResolvedValue({
       ...page,
-      content: {
-        type: 'doc',
-        content: [
-          {
-            type: 'paragraph',
-            content: [{ type: 'text', text: 'hello' }],
-          },
-        ],
-      },
+      content: currentContent,
+    });
+    deps.collaborationGateway.handleYjsEvent.mockResolvedValue({
+      revision: 'revision-hello',
+      content: currentContent,
     });
 
     const asMarkdown: any = await callTool(service, 'get_page', {
@@ -728,6 +743,49 @@ describe('McpService permissions', () => {
     const jsonBody = JSON.parse(asJson.result.content[0].text);
 
     expect(jsonBody.content.type).toBe('doc');
+  });
+
+  it('get_page reads the current collaboration snapshot without writing legacy blocks', async () => {
+    const { service, deps } = buildService();
+    deps.collaborationGateway.handleYjsEvent.mockResolvedValue({
+      revision: 'revision-current',
+      content: {
+        type: 'doc',
+        content: [
+          {
+            type: 'paragraph',
+            content: [
+              { type: 'text', text: 'Current ' },
+              { type: 'status', attrs: { text: 'In progress', color: 'blue' } },
+            ],
+          },
+          { type: 'subpages', attrs: {} },
+        ],
+      },
+    });
+
+    const response: any = await callTool(service, 'get_page', { pageId: 'page-1' });
+    const body = JSON.parse(response.result.content[0].text);
+
+    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
+    expect(deps.collaborationGateway.handleYjsEvent).toHaveBeenCalledWith(
+      'getPageSnapshot',
+      'page-1',
+      { user },
+    );
+    expect(body).toEqual(expect.objectContaining({ revision: 'revision-current' }));
+    expect(body.content).toContain('Current');
+    expect(body.blocks).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        id: 'legacy:revision-current:0',
+        type: 'paragraph',
+        path: [0],
+      }),
+      expect.objectContaining({ type: 'status', path: [0, 1] }),
+      expect.objectContaining({ type: 'subpages', path: [1] }),
+    ]));
+    expect(deps.pageService.update).not.toHaveBeenCalled();
+    expect(deps.wsService.emitCommentEvent).not.toHaveBeenCalled();
   });
 
   it('list_spaces returns nothing when the user belongs to no space', async () => {

@@ -14,6 +14,7 @@ import { ExportModule } from '../../integrations/export/export.module';
 import { AttachmentModule } from '../../core/attachment/attachment.module';
 import { EmbeddingModule } from '../embedding/embedding.module';
 import { RichContentModule } from './rich-content/rich-content.module';
+import { CollaborationModule } from '../../collaboration/collaboration.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { RichContentModule } from './rich-content/rich-content.module';
     AttachmentModule,
     EmbeddingModule,
     RichContentModule,
+    CollaborationModule,
   ],
   controllers: [McpController],
   providers: [McpService],
