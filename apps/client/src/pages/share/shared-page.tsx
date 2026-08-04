@@ -2,12 +2,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useSharePageQuery } from "@/features/share/queries/share-query.ts";
-import { Container } from "@mantine/core";
+import { Button, Container } from "@mantine/core";
 import React, { useEffect } from "react";
 import { extractPageSlugId } from "@/lib";
 import { Error404 } from "@/components/ui/error-404.tsx";
+import { EmptyState } from "@/components/ui/empty-state.tsx";
 import ShareBranding from "@/features/share/components/share-branding.tsx";
+import { IconAlertTriangle } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
+import { ErrorBoundary } from "react-error-boundary";
 import {
   sharedPageFullWidthAtom,
   sharedTreeDataAtom,
@@ -67,17 +70,37 @@ export default function SharedPage() {
       </Helmet>
 
       <Container fluid={fullWidth} size={fullWidth ? undefined : 900} p={0}>
-        <React.Suspense
-          fallback={<div role="status" aria-label={t("Loading page content")} />}
+        <ErrorBoundary
+          resetKeys={[data.page.id]}
+          fallbackRender={() => (
+            <EmptyState
+              icon={IconAlertTriangle}
+              title={t("Failed to load page. An error occurred.")}
+              action={
+                <Button
+                  variant="default"
+                  size="sm"
+                  mt="xs"
+                  onClick={() => window.location.reload()}
+                >
+                  {t("Try again")}
+                </Button>
+              }
+            />
+          )}
         >
-          <ReadonlyPageEditor
-            key={data.page.id}
-            title={data.page.title}
-            content={data.page.content}
-            pageId={data.page.id}
-            shareId={data.share.id}
-          />
-        </React.Suspense>
+          <React.Suspense
+            fallback={<div role="status" aria-label={t("Loading page content")} />}
+          >
+            <ReadonlyPageEditor
+              key={data.page.id}
+              title={data.page.title}
+              content={data.page.content}
+              pageId={data.page.id}
+              shareId={data.share.id}
+            />
+          </React.Suspense>
+        </ErrorBoundary>
       </Container>
 
       {data && !shareId && !(data.features?.length > 0) && <ShareBranding />}
