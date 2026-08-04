@@ -13,6 +13,7 @@
 - As versões negociadas são `2024-11-05`, `2025-03-26` e `2025-06-18`. O servidor devolve a versão conhecida solicitada; para uma versão desconhecida, devolve `2025-06-18`.
 - `tools/call` retorna conteúdo textual JSON para resultados. Erros de ferramenta retornam `result.isError: true`; método desconhecido usa erro JSON-RPC `-32601`.
 - `getToolsList()` em `mcp.service.ts` é a fonte de verdade. A lista exibida em `apps/client/src/ee/ai/components/mcp-settings.tsx` é apenas um resumo e pode não conter todas as ferramentas.
+- `apps/server/src/core/rich-content/rich-content-capabilities.ts` mantém o contrato compartilhado para futura descoberta de conteúdo rico pelo MCP: ele lista as capacidades públicas do schema TipTap e exclui o mark interno `comment`.
 
 ## Recursos Expostos
 
