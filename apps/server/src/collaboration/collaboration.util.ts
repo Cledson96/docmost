@@ -55,6 +55,7 @@ import { generateHTML, generateJSON } from '../common/helpers/prosemirror/html';
 import { Node, Schema } from '@tiptap/pm/model';
 import * as Y from 'yjs';
 import { Logger } from '@nestjs/common';
+import { agentAddressableNodeTypes } from '../core/rich-content/rich-content-capabilities';
 
 export const tiptapExtensions = [
   StarterKit.configure({
@@ -65,7 +66,7 @@ export const tiptapExtensions = [
   }),
   Heading,
   UniqueID.configure({
-    types: ['heading', 'paragraph', 'transclusionSource'],
+    types: agentAddressableNodeTypes,
   }),
   Comment,
   TextAlign.configure({ types: ['heading', 'paragraph'] }),
@@ -110,7 +111,7 @@ export const tiptapExtensions = [
   Status,
   TransclusionSource,
   TransclusionReference,
-  BaseEmbed
+  BaseEmbed,
 ] as any;
 
 export function jsonToHtml(tiptapJson: any) {
