@@ -170,7 +170,7 @@ export class McpService {
         jsonrpc: '2.0',
         id,
         result: {
-          tools: this.getToolsList(),
+          tools: this.getToolsList(workspace),
         },
       };
     }
@@ -253,8 +253,8 @@ export class McpService {
     return LATEST_PROTOCOL_VERSION;
   }
 
-  private getToolsList() {
-    return [
+  private getToolsList(workspace: Workspace) {
+    const tools = [
       {
         name: 'get_content_capabilities',
         description:
@@ -268,6 +268,23 @@ export class McpService {
       ...this.getBaseToolsList(),
       ...this.getWorkspaceToolsList(),
     ];
+    return this.isRichContentEnabled(workspace)
+      ? tools
+      : tools.filter((tool) => !this.isRichContentTool(tool.name));
+  }
+
+  private isRichContentEnabled(workspace: Workspace): boolean {
+    return (workspace.settings as any)?.ai?.mcpRichContent === true;
+  }
+
+  private isRichContentTool(name: string): boolean {
+    return ['edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments'].includes(name);
+  }
+
+  private assertRichContentEnabled(workspace: Workspace): void {
+    if (!this.isRichContentEnabled(workspace)) {
+      throw new ForbiddenException('MCP rich content is disabled for this workspace');
+    }
   }
 
   /**
@@ -1371,7 +1388,11 @@ export class McpService {
   ) {
     switch (name) {
       case 'get_content_capabilities':
+        if (!this.isRichContentEnabled(workspace)) {
+          return { enabled: false, message: 'MCP rich content is disabled for this workspace' };
+        }
         return {
+          enabled: true,
           capabilities: this.richContentCapabilitiesService.getCapabilities(),
         };
 
@@ -1441,16 +1462,9 @@ export class McpService {
         await this.pageAccessService.validateCanView(page, user);
 
         const format = args.format || 'markdown';
-        const snapshot = await this.collaborationGateway.handleYjsEvent(
-          'getPageSnapshot',
-          `page.${page.id}`,
-          { user },
-        );
-        const richContent = await this.contentReaderService.readResolved(snapshot, {
-          page,
-          user,
-          workspaceId: workspace.id,
-        });
+        const richContent = this.isRichContentEnabled(workspace)
+          ? await this.getRichPageContent(page, user, workspace)
+          : undefined;
 
         return {
           id: page.id,
@@ -1461,22 +1475,24 @@ export class McpService {
           format,
           content:
             format === 'markdown'
-              ? richContent.content
+              ? richContent?.content ?? this.renderPageContent(page.content, format)
               : this.renderPageContent(page.content, format),
-          revision: richContent.revision,
-          blocks: richContent.blocks,
+          ...(richContent && { revision: richContent.revision, blocks: richContent.blocks }),
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         };
       }
 
       case 'edit_page_blocks':
+        this.assertRichContentEnabled(workspace);
         return this.blockEditService.edit(args, user, workspace);
 
       case 'search_users':
+        this.assertRichContentEnabled(workspace);
         return this.userRepo.getUsersPaginated(workspace.id, this.pagination(args));
 
       case 'list_child_pages': {
+        this.assertRichContentEnabled(workspace);
         if (!args.parentPageId) throw new BadRequestException('parentPageId is required');
         const parent = await this.getPageInWorkspace(args.parentPageId, workspace);
         await this.pageAccessService.validateCanView(parent, user);
@@ -1635,6 +1651,19 @@ export class McpService {
     }
   }
 
+  private async getRichPageContent(page: Page, user: User, workspace: Workspace) {
+    const snapshot = await this.collaborationGateway.handleYjsEvent(
+      'getPageSnapshot',
+      `page.${page.id}`,
+      { user },
+    );
+    return this.contentReaderService.readResolved(snapshot!, {
+      page,
+      user,
+      workspaceId: workspace.id,
+    });
+  }
+
   private async listChildPages(parent: Page, user: User, args: any) {
     const limit = this.childPageLimit(args.limit);
     const depth = this.childPageDepth(args.depth);
@@ -1690,6 +1719,7 @@ export class McpService {
   ) {
     switch (name) {
       case 'list_page_attachments': {
+        this.assertRichContentEnabled(workspace);
         const page = await this.getPageInWorkspace(args.pageId, workspace);
         await this.pageAccessService.validateCanView(page, user);
         return this.attachmentRepo.findByPageIdPaginated(

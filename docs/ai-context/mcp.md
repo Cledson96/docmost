@@ -42,6 +42,7 @@
 ## Configuração E Interface
 
 - O switch de workspace é `settings.ai.mcp`, alterado por `mcpEnabled` em `UpdateWorkspaceDto`. A atualização exige o recurso de licença `mcp` e é persistida por `WorkspaceRepo.updateAiSettings`.
+- O rollout de rich content é separado em `settings.ai.mcpRichContent`, alterado por `mcpRichContentEnabled` e desligado por padrão. Com ele desligado, MCP não lista nem executa `edit_page_blocks`, `list_child_pages`, `search_users` ou `list_page_attachments`; `get_page` não inclui revisão/blocos e `get_content_capabilities` informa que está desabilitado. O switch aparece como controle secundário apenas quando MCP está ativo.
 - A tela de IA em `apps/client/src/ee/ai/components/mcp-settings.tsx` mostra a URL `${APP_URL}/mcp`, habilita/desabilita o switch e orienta o uso de uma API key.
 - `POST /mcp` verifica `workspace.settings.ai.mcp` no controller e responde 403 (`ForbiddenException`) quando o switch está desligado ou nunca foi definido. O `GET /mcp` informativo permanece público e não consulta o switch.
 

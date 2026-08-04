@@ -331,6 +331,7 @@ export class WorkspaceService {
       typeof updateWorkspaceDto.disablePublicSharing !== 'undefined' ||
       typeof updateWorkspaceDto.trashRetentionDays !== 'undefined' ||
       typeof updateWorkspaceDto.mcpEnabled !== 'undefined' ||
+      typeof updateWorkspaceDto.mcpRichContentEnabled !== 'undefined' ||
       typeof updateWorkspaceDto.restrictApiToAdmins !== 'undefined' ||
       typeof updateWorkspaceDto.allowMemberTemplates !== 'undefined' ||
       typeof updateWorkspaceDto.isScimEnabled !== 'undefined' ||
@@ -346,7 +347,7 @@ export class WorkspaceService {
         throw new NotFoundException('Workspace not found');
       }
 
-      if (typeof updateWorkspaceDto.mcpEnabled !== 'undefined') {
+      if (typeof updateWorkspaceDto.mcpEnabled !== 'undefined' || typeof updateWorkspaceDto.mcpRichContentEnabled !== 'undefined') {
         if (!this.licenseCheckService.hasFeature(ws.licenseKey, 'mcp', ws.plan)) {
           throw new ForbiddenException(
             'This feature requires a valid license',
@@ -485,6 +486,20 @@ export class WorkspaceService {
         );
       }
 
+      if (typeof updateWorkspaceDto.mcpRichContentEnabled !== 'undefined') {
+        const prev = settingsBefore?.ai?.mcpRichContent ?? false;
+        if (prev !== updateWorkspaceDto.mcpRichContentEnabled) {
+          before.mcpRichContentEnabled = prev;
+          after.mcpRichContentEnabled = updateWorkspaceDto.mcpRichContentEnabled;
+        }
+        await this.workspaceRepo.updateAiSettings(
+          workspaceId,
+          'mcpRichContent',
+          updateWorkspaceDto.mcpRichContentEnabled,
+          trx,
+        );
+      }
+
       if (typeof updateWorkspaceDto.allowMemberTemplates !== 'undefined') {
         const prev = settingsBefore?.templates?.allowMemberTemplates ?? false;
         if (prev !== updateWorkspaceDto.allowMemberTemplates) {
@@ -546,6 +561,7 @@ export class WorkspaceService {
       delete updateWorkspaceDto.generativeAi;
       delete updateWorkspaceDto.disablePublicSharing;
       delete updateWorkspaceDto.mcpEnabled;
+      delete updateWorkspaceDto.mcpRichContentEnabled;
       delete updateWorkspaceDto.allowMemberTemplates;
       delete updateWorkspaceDto.aiChat;
       delete updateWorkspaceDto.allowPersonalSpaces;

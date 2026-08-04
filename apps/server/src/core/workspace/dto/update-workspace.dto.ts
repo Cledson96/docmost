@@ -45,6 +45,10 @@ export class UpdateWorkspaceDto extends PartialType(CreateWorkspaceDto) {
 
   @IsOptional()
   @IsBoolean()
+  mcpRichContentEnabled: boolean;
+
+  @IsOptional()
+  @IsBoolean()
   isScimEnabled: boolean;
 
   @IsOptional()

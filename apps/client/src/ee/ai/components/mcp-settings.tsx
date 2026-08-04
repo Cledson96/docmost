@@ -27,6 +27,9 @@ export default function McpSettings() {
   const { t } = useTranslation();
   const [workspace, setWorkspace] = useAtom(workspaceAtom);
   const [checked, setChecked] = useState(workspace?.settings?.ai?.mcp);
+  const [richContentEnabled, setRichContentEnabled] = useState(
+    workspace?.settings?.ai?.mcpRichContent === true,
+  );
   const hasAccess = useHasFeature(Feature.MCP);
   const upgradeLabel = useUpgradeLabel();
 
@@ -43,6 +46,17 @@ export default function McpSettings() {
         message: err?.response?.data?.message,
         color: "red",
       });
+    }
+  };
+
+  const handleRichContentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const value = event.currentTarget.checked;
+    try {
+      const updatedWorkspace = await updateWorkspace({ mcpRichContentEnabled: value });
+      setRichContentEnabled(value);
+      setWorkspace(updatedWorkspace);
+    } catch (err) {
+      notifications.show({ message: err?.response?.data?.message, color: "red" });
     }
   };
 
@@ -83,6 +97,15 @@ export default function McpSettings() {
 
       {checked && (
         <div>
+          <Group justify="space-between" wrap="nowrap" gap="xl" mb="md">
+            <div>
+              <Text size="sm" fw={500}>{t("Rich content tools")}</Text>
+              <Text size="sm" c="dimmed">
+                {t("Enable structured page blocks, live revisions, child-page browsing, user search, and attachment listing for MCP clients.")}
+              </Text>
+            </div>
+            <Switch checked={richContentEnabled} onChange={handleRichContentChange} />
+          </Group>
           <Text size="sm" fw={500} mb={4}>
             {t("MCP Server URL")}
           </Text>
@@ -117,36 +140,8 @@ export default function McpSettings() {
               {t("Supported tools")}
             </Text>
             <List size="sm" spacing={2}>
-              <List.Item>
-                <Text size="sm" c="dimmed" span>
-                  search_pages, get_page, create_page, update_page
-                </Text>
-              </List.Item>
-              <List.Item>
-                <Text size="sm" c="dimmed" span>
-                  list_pages, list_child_pages, duplicate_page
-                </Text>
-              </List.Item>
-              <List.Item>
-                <Text size="sm" c="dimmed" span>
-                  copy_page_to_space, move_page, move_page_to_space
-                </Text>
-              </List.Item>
-              <List.Item>
-                <Text size="sm" c="dimmed" span>
-                  get_space, list_spaces, create_space, update_space
-                </Text>
-              </List.Item>
-              <List.Item>
-                <Text size="sm" c="dimmed" span>
-                  get_comments, create_comment, update_comment
-                </Text>
-              </List.Item>
-              <List.Item>
-                <Text size="sm" c="dimmed" span>
-                  search_attachments, list_workspace_members, get_current_user
-                </Text>
-              </List.Item>
+              <List.Item><Text size="sm" c="dimmed" span>{t("Pages, spaces, comments, labels, favorites, templates, attachments, exports, bases, and search")}</Text></List.Item>
+              <List.Item><Text size="sm" c="dimmed" span>{t("Rich content: get_content_capabilities, structured get_page, edit_page_blocks, list_child_pages, search_users, list_page_attachments")}</Text></List.Item>
             </List>
           </div>
         </div>

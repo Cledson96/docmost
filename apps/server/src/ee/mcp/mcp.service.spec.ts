@@ -6,7 +6,7 @@ import { richContentCapabilities } from '../../core/rich-content/rich-content-ca
 import { BlockEditService } from './rich-content/block-edit.service';
 
 const user = { id: 'user-1' } as any;
-const workspace = { id: 'workspace-1' } as any;
+const workspace = { id: 'workspace-1', settings: { ai: { mcpRichContent: true } } } as any;
 
 const page = {
   id: 'page-1',
@@ -125,6 +125,32 @@ function callTool(service: McpService, name: string, args: any) {
 }
 
 describe('McpService permissions', () => {
+  it('hides and rejects rich content tools when the workspace rollout is disabled', async () => {
+    const { service, deps } = buildService();
+    const disabledWorkspace = { ...workspace, settings: { ai: { mcpRichContent: false } } } as any;
+
+    const listed: any = await service.handleRpcRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' }, user, disabledWorkspace,
+    );
+    const names = listed.result.tools.map((tool: any) => tool.name);
+    expect(names).toContain('get_content_capabilities');
+    expect(names).not.toEqual(expect.arrayContaining([
+      'edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments',
+    ]));
+
+    const capabilities: any = await service.handleRpcRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_content_capabilities', arguments: {} } },
+      user, disabledWorkspace,
+    );
+    expect(JSON.parse(capabilities.result.content[0].text)).toEqual(expect.objectContaining({ enabled: false }));
+
+    const edit: any = await service.handleRpcRequest(
+      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'edit_page_blocks', arguments: {} } },
+      user, disabledWorkspace,
+    );
+    expect(edit.result).toMatchObject({ isError: true });
+    expect(deps.blockEditService.edit).not.toHaveBeenCalled();
+  });
   it('dispatches edit_page_blocks with the authenticated API-key owner and preserves tool errors', async () => {
     const { service, deps } = buildService();
     const args = { pageId: 'page-1', expectedRevision: 'revision-1', operations: [] };
