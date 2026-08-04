@@ -745,6 +745,33 @@ describe('McpService permissions', () => {
     expect(jsonBody.content.type).toBe('doc');
   });
 
+  it('lists an accessible parent page children using the sidebar cursor order', async () => {
+    const { service, deps } = buildService();
+    deps.pageService.getSidebarPages = jest.fn().mockResolvedValue({
+      items: [{ id: 'child-1', title: 'First', position: 'a0' }],
+      meta: { limit: 10, hasNextPage: true, hasPrevPage: false, nextCursor: 'next', prevCursor: null },
+    });
+
+    const response: any = await callTool(service, 'list_child_pages', {
+      parentPageId: 'page-1',
+      limit: 10,
+      cursor: 'cursor-1',
+      depth: 1,
+    });
+
+    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
+    expect(deps.pageService.getSidebarPages).toHaveBeenCalledWith(
+      'space-1',
+      expect.objectContaining({ limit: 10, cursor: 'cursor-1' }),
+      'page-1',
+      'user-1',
+      true,
+    );
+    expect(JSON.parse(response.result.content[0].text)).toEqual(
+      expect.objectContaining({ items: [{ id: 'child-1', title: 'First', position: 'a0' }] }),
+    );
+  });
+
   it('get_page reads the current collaboration snapshot without writing legacy blocks', async () => {
     const { service, deps } = buildService();
     deps.collaborationGateway.handleYjsEvent.mockResolvedValue({

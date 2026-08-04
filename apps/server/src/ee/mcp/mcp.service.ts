@@ -784,6 +784,20 @@ export class McpService {
         },
       },
       {
+        name: 'list_child_pages',
+        description: 'List the accessible direct children of a parent page in sidebar position order. Set depth to include descendants (maximum 5).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            parentPageId: { type: 'string', description: 'Required parent page ID or slug ID' },
+            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: { type: 'number', description: 'Children per page, from 1 to 100. Defaults to 20.' },
+            depth: { type: 'number', description: 'Nested levels to include, from 1 to 5. Defaults to 1.' },
+          },
+          required: ['parentPageId'],
+        },
+      },
+      {
         name: 'create_page',
         description: 'Create a new page in a space.',
         inputSchema: {
@@ -1376,7 +1390,11 @@ export class McpService {
           `page.${page.id}`,
           { user },
         );
-        const richContent = this.contentReaderService.read(snapshot);
+        const richContent = await this.contentReaderService.readResolved(snapshot, {
+          page,
+          user,
+          workspaceId: workspace.id,
+        });
 
         return {
           id: page.id,
@@ -1394,6 +1412,13 @@ export class McpService {
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         };
+      }
+
+      case 'list_child_pages': {
+        if (!args.parentPageId) throw new BadRequestException('parentPageId is required');
+        const parent = await this.getPageInWorkspace(args.parentPageId, workspace);
+        await this.pageAccessService.validateCanView(parent, user);
+        return this.listChildPages(parent, user, args);
       }
 
       case 'create_page': {
@@ -1539,6 +1564,53 @@ export class McpService {
       default:
         return this.callBaseTool(name, args, user, workspace);
     }
+  }
+
+  private async listChildPages(parent: Page, user: User, args: any) {
+    const limit = this.childPageLimit(args.limit);
+    const depth = this.childPageDepth(args.depth);
+    return this.readChildPageLevel(parent, user, limit, args.cursor, depth, new Set());
+  }
+
+  private async readChildPageLevel(
+    parent: Pick<Page, 'id' | 'spaceId'>,
+    user: User,
+    limit: number,
+    cursor: string | undefined,
+    depth: number,
+    ancestors: Set<string>,
+  ): Promise<any> {
+    if (ancestors.has(parent.id)) {
+      return { code: 'DYNAMIC_RESOLUTION_FAILED', type: 'subpages', message: 'Page tree cycle detected' };
+    }
+    const result = await this.pageService.getSidebarPages(
+      parent.spaceId,
+      { limit, cursor, query: '', adminView: false },
+      parent.id,
+      user.id,
+      true,
+    );
+    if (depth <= 1) return result;
+    const nextAncestors = new Set(ancestors).add(parent.id);
+    return {
+      ...result,
+      items: await Promise.all(result.items.map(async (child: any) => ({
+        ...child,
+        children: await this.readChildPageLevel(child, user, limit, undefined, depth - 1, nextAncestors),
+      }))),
+    };
+  }
+
+  private childPageLimit(value: unknown): number {
+    return typeof value === 'number' && Number.isInteger(value)
+      ? Math.max(1, Math.min(value, 100))
+      : 20;
+  }
+
+  private childPageDepth(value: unknown): number {
+    return typeof value === 'number' && Number.isInteger(value)
+      ? Math.max(1, Math.min(value, 5))
+      : 1;
   }
 
   private async callWorkspaceTool(
