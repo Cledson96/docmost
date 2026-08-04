@@ -16,6 +16,7 @@ interface PageEditorProps {
   content: any;
   pageId?: string;
   printMode?: boolean;
+  showTitle?: boolean;
   /**
    * When rendering inside a public share, pass the share's id (or key). Lookups
    * for transclusion content then resolve against the share graph instead of
@@ -30,6 +31,7 @@ export default function ReadonlyPageEditor({
   content,
   pageId,
   printMode = false,
+  showTitle = true,
   shareId,
 }: PageEditorProps) {
   const [, setReadOnlyEditor] = useAtom(readOnlyEditorAtom);
@@ -81,14 +83,16 @@ export default function ReadonlyPageEditor({
 
   return (
     <TransclusionLookupProvider shareId={shareId}>
-      <div className="page-title">
-        <EditorProvider
-          editable={false}
-          immediatelyRender={true}
-          extensions={titleExtensions}
-          content={title}
-        ></EditorProvider>
-      </div>
+      {showTitle && (
+        <div className="page-title">
+          <EditorProvider
+            editable={false}
+            immediatelyRender={true}
+            extensions={titleExtensions}
+            content={title}
+          ></EditorProvider>
+        </div>
+      )}
 
       <EditorProvider
         editable={false}
