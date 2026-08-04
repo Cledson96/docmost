@@ -252,6 +252,56 @@ describe('McpService permissions', () => {
     expect(deps.pageService.create).not.toHaveBeenCalled();
   });
 
+  it('creates pages from Agent Markdown directives as ProseMirror JSON', async () => {
+    const { service, deps } = buildService();
+    deps.pageService.create.mockResolvedValue(page);
+    deps.spaceAbility.createForUser.mockResolvedValue({ cannot: () => false });
+    const status = Buffer.from(JSON.stringify({
+      id: null,
+      attrs: { text: 'In progress', color: 'blue' },
+    })).toString('base64url');
+
+    await callTool(service, 'create_page', {
+      title: 'New',
+      spaceId: 'space-1',
+      content: `:::docmost-subpages\nid: subpages-1\nattrs: {}\n:::\n\n{{docmost:status ${status}}}`,
+    });
+
+    expect(deps.pageService.create).toHaveBeenCalledWith('user-1', 'workspace-1', expect.objectContaining({
+      format: 'json',
+      content: expect.objectContaining({
+        type: 'doc',
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'subpages', attrs: expect.objectContaining({ id: 'subpages-1' }) }),
+          expect.objectContaining({ type: 'paragraph' }),
+        ]),
+      }),
+    }));
+  });
+
+  it('updates ordinary Markdown through JSON while preserving the requested operation', async () => {
+    const { service, deps } = buildService();
+
+    await callTool(service, 'update_page', {
+      pageId: 'page-1',
+      content: '# Title\n\n**bold**',
+      operation: 'prepend',
+    });
+
+    expect(deps.pageService.update).toHaveBeenCalledWith(page, expect.objectContaining({
+      pageId: 'page-1',
+      format: 'json',
+      operation: 'prepend',
+      content: expect.objectContaining({
+        type: 'doc',
+        content: expect.arrayContaining([
+          expect.objectContaining({ type: 'heading' }),
+          expect.objectContaining({ type: 'paragraph' }),
+        ]),
+      }),
+    }), user);
+  });
+
   it('create_base checks the space resolved from the parent page', async () => {
     const { service, deps } = buildService();
     deps.baseService.createBase.mockResolvedValue({ id: 'base-1', title: 'K' });

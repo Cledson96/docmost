@@ -50,9 +50,10 @@ import {
   jsonToHtml,
   jsonToMarkdown,
   jsonToText,
+  tiptapExtensions,
 } from '../../collaboration/collaboration.util';
 import { sql } from 'kysely';
-import { markdownToHtml } from '@docmost/editor-ext';
+import { agentMarkdownToProsemirror, markdownToHtml } from '@docmost/editor-ext';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import {
@@ -1500,12 +1501,16 @@ export class McpService {
           await this.assertCanCreateInSpace(user, args.spaceId);
         }
 
+        const content = await agentMarkdownToProsemirror(
+          args.content ?? '',
+          tiptapExtensions,
+        );
         const page = await this.pageService.create(user.id, workspace.id, {
           title: args.title,
           spaceId: args.spaceId,
           parentPageId: args.parentPageId || undefined,
-          content: args.content || '',
-          format: 'markdown',
+          content,
+          format: 'json',
         });
 
         this.auditService.log({
@@ -1540,9 +1545,12 @@ export class McpService {
           pageId: page.id,
           title: args.title,
           ...(hasContent && {
-            content: args.content,
+            content: await agentMarkdownToProsemirror(
+              args.content,
+              tiptapExtensions,
+            ),
             operation: (args.operation || 'append') as ContentOperation,
-            format: 'markdown' as ContentFormat,
+            format: 'json' as ContentFormat,
           }),
         };
 
