@@ -35,6 +35,7 @@
 - Cada bloco MCP corresponde a um nó público registrado do schema TipTap (inclusive nós inline), em ordem de documento. Ele mantém o `id` persistido quando houver; conteúdo legado recebe o locator somente de leitura `legacy:<revision>:<path>`, sem a atribuição de IDs. Estruturas internas, como `doc`, `text` e `listItem`, não são blocos próprios.
 - Os blocos dinâmicos de `get_page` são resolvidos por usuário: `subpages` usa `PageService.getSidebarPages` (e portanto a mesma ordem `position`/`id` e filtro de acesso da sidebar), `base` exige leitura da página-base e devolve somente `BaseService.getBaseInfo`, e `transclusionReference` usa `TransclusionService.lookup`. Uma falha de um bloco devolve `{ code: 'DYNAMIC_RESOLUTION_FAILED', type, message }` naquele bloco, sem falhar a página inteira; listas aninhadas são limitadas a profundidade 5 e até 100 itens por nível.
 - `list_child_pages` requer `parentPageId`, valida a leitura do pai e devolve filhos pelo mesmo caminho da sidebar. Aceita `cursor`, `limit` (1–100) e `depth` (1–5); filhos inacessíveis nunca entram na resposta.
+- `search_users` pagina usuários ativos do workspace por nome/e-mail com `UserRepo.getUsersPaginated`; `list_page_attachments` valida leitura da página e usa `AttachmentRepo.findByPageIdPaginated`, filtrado por página e workspace.
 - Upload de anexo por MCP aceita no máximo 2 MiB de bytes antes de base64. Exports que geram ZIP, como uma página com filhos ou anexos, não podem ser devolvidos pelo MCP.
 
 ## Configuração E Interface

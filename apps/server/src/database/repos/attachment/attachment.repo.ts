@@ -8,6 +8,8 @@ import {
   UpdatableAttachment,
 } from '@docmost/db/types/entity.types';
 import { AttachmentType } from '../../../core/attachment/attachment.constants';
+import { PaginationOptions } from '../../pagination/pagination-options';
+import { executeWithCursorPagination } from '../../pagination/cursor-pagination';
 
 @Injectable()
 export class AttachmentRepo {
@@ -118,6 +120,33 @@ export class AttachmentRepo {
       .select(this.baseFields)
       .where('aiChatId', '=', aiChatId)
       .execute();
+  }
+
+  async findByPageIdPaginated(
+    pageId: string,
+    workspaceId: string,
+    pagination: PaginationOptions,
+  ) {
+    const query = this.db
+      .selectFrom('attachments')
+      .select(this.baseFields)
+      .where('pageId', '=', pageId)
+      .where('workspaceId', '=', workspaceId)
+      .where('deletedAt', 'is', null);
+
+    return executeWithCursorPagination(query, {
+      perPage: pagination.limit,
+      cursor: pagination.cursor,
+      beforeCursor: pagination.beforeCursor,
+      fields: [
+        { expression: 'createdAt', direction: 'desc' },
+        { expression: 'id', direction: 'asc' },
+      ],
+      parseCursor: (cursor) => ({
+        createdAt: new Date(cursor.createdAt),
+        id: cursor.id,
+      }),
+    });
   }
 
   updateAttachmentsByPageId(

@@ -15,6 +15,7 @@ import {
 import { ContentFormat } from '../../core/page/dto/create-page.dto';
 import { PageAccessService } from '../../core/page/page-access/page-access.service';
 import { PageRepo } from '@docmost/db/repos/page/page.repo';
+import { UserRepo } from '@docmost/db/repos/user/user.repo';
 import { PagePermissionRepo } from '@docmost/db/repos/page/page-permission.repo';
 import { SpaceMemberRepo } from '@docmost/db/repos/space/space-member.repo';
 import SpaceAbilityFactory from '../../core/casl/abilities/space-ability.factory';
@@ -105,6 +106,7 @@ export class McpService {
     @InjectKysely() private readonly db: KyselyDB,
     private readonly pageService: PageService,
     private readonly pageRepo: PageRepo,
+    private readonly userRepo: UserRepo,
     private readonly pageAccessService: PageAccessService,
     private readonly pagePermissionRepo: PagePermissionRepo,
     private readonly spaceMemberRepo: SpaceMemberRepo,
@@ -784,6 +786,24 @@ export class McpService {
         },
       },
       {
+        name: 'list_page_attachments',
+        description: 'List attachments on a page the caller can view.',
+        inputSchema: { type: 'object', properties: {
+          pageId: { type: 'string', description: 'Page ID or slug ID' },
+          limit: { type: 'number', description: 'Max attachments. Defaults to 20.' },
+          cursor: { type: 'string', description: 'Cursor from a previous response' },
+        }, required: ['pageId'] },
+      },
+      {
+        name: 'search_users',
+        description: 'Search active users in the current workspace by name or email.',
+        inputSchema: { type: 'object', properties: {
+          query: { type: 'string', description: 'Optional name or email query' },
+          limit: { type: 'number', description: 'Max users. Defaults to 20.' },
+          cursor: { type: 'string', description: 'Cursor from a previous response' },
+        } },
+      },
+      {
         name: 'list_child_pages',
         description: 'List the accessible direct children of a parent page in sidebar position order. Set depth to include descendants (maximum 5).',
         inputSchema: {
@@ -1414,6 +1434,9 @@ export class McpService {
         };
       }
 
+      case 'search_users':
+        return this.userRepo.getUsersPaginated(workspace.id, this.pagination(args));
+
       case 'list_child_pages': {
         if (!args.parentPageId) throw new BadRequestException('parentPageId is required');
         const parent = await this.getPageInWorkspace(args.parentPageId, workspace);
@@ -1620,6 +1643,16 @@ export class McpService {
     workspace: Workspace,
   ) {
     switch (name) {
+      case 'list_page_attachments': {
+        const page = await this.getPageInWorkspace(args.pageId, workspace);
+        await this.pageAccessService.validateCanView(page, user);
+        return this.attachmentRepo.findByPageIdPaginated(
+          page.id,
+          workspace.id,
+          this.pagination(args),
+        );
+      }
+
       // --- comments ---
       case 'list_page_comments': {
         const page = await this.getPageInWorkspace(args.pageId, workspace);
@@ -2356,6 +2389,7 @@ export class McpService {
     return {
       limit: Math.min(args.limit || 20, 100),
       cursor: args.cursor,
+      query: args.query,
     } as PaginationOptions;
   }
 

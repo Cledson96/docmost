@@ -30,6 +30,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       removePage: jest.fn(),
     },
     pageRepo: { findById: jest.fn().mockResolvedValue(page) },
+    userRepo: { getUsersPaginated: jest.fn().mockResolvedValue({ items: [], meta: {} }) },
     pageAccessService: {
       validateCanView: jest.fn(),
       validateCanEdit: jest.fn(),
@@ -52,7 +53,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     backlinkService: { findByPageId: jest.fn() },
     templateService: { getTemplate: jest.fn(), useTemplate: jest.fn() },
     searchAttachmentsService: { search: jest.fn() },
-    attachmentRepo: { findById: jest.fn() },
+    attachmentRepo: { findById: jest.fn(), findByPageIdPaginated: jest.fn().mockResolvedValue({ items: [], meta: {} }) },
     attachmentService: { uploadFile: jest.fn() },
     embeddingService: {
       isConfigured: jest.fn().mockReturnValue(true),
@@ -81,6 +82,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       'db',
       'pageService',
       'pageRepo',
+      'userRepo',
       'pageAccessService',
       'pagePermissionRepo',
       'spaceMemberRepo',
@@ -770,6 +772,48 @@ describe('McpService permissions', () => {
     expect(JSON.parse(response.result.content[0].text)).toEqual(
       expect.objectContaining({ items: [{ id: 'child-1', title: 'First', position: 'a0' }] }),
     );
+  });
+
+  it('searches active workspace users through cursor pagination', async () => {
+    const { service, deps } = buildService();
+    deps.userRepo.getUsersPaginated.mockResolvedValue({
+      items: [{ id: 'user-2', name: 'Ada', email: 'ada@example.com' }],
+      meta: { limit: 10, nextCursor: 'next' },
+    });
+
+    const response: any = await callTool(service, 'search_users', {
+      query: 'ada', limit: 10, cursor: 'cursor-1',
+    });
+
+    expect(deps.userRepo.getUsersPaginated).toHaveBeenCalledWith(
+      'workspace-1',
+      expect.objectContaining({ query: 'ada', limit: 10, cursor: 'cursor-1' }),
+    );
+    expect(JSON.parse(response.result.content[0].text).items).toEqual([
+      { id: 'user-2', name: 'Ada', email: 'ada@example.com' },
+    ]);
+  });
+
+  it('lists attachments only after validating access to the owning page', async () => {
+    const { service, deps } = buildService();
+    deps.attachmentRepo.findByPageIdPaginated.mockResolvedValue({
+      items: [{ id: 'attachment-1', fileName: 'brief.pdf', pageId: 'page-1' }],
+      meta: { limit: 10, nextCursor: null },
+    });
+
+    const response: any = await callTool(service, 'list_page_attachments', {
+      pageId: 'page-1', limit: 10, cursor: 'cursor-1',
+    });
+
+    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
+    expect(deps.attachmentRepo.findByPageIdPaginated).toHaveBeenCalledWith(
+      'page-1',
+      'workspace-1',
+      expect.objectContaining({ limit: 10, cursor: 'cursor-1' }),
+    );
+    expect(JSON.parse(response.result.content[0].text).items).toEqual([
+      { id: 'attachment-1', fileName: 'brief.pdf', pageId: 'page-1' },
+    ]);
   });
 
   it('get_page reads the current collaboration snapshot without writing legacy blocks', async () => {
