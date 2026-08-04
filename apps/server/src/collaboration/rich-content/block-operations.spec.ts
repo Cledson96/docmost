@@ -83,4 +83,21 @@ describe('applyBlockOperations', () => {
     expect(() => applyBlockOperations(doc, { operations: [{ type: 'update', target: 'one', attrs: { id: 'two' } }] })).toThrow(expect.objectContaining({ code: 'DUPLICATE_BLOCK_ID' }));
     expect(() => applyBlockOperations(doc, { operations: [{ type: 'insertIn', target: 'one', content: { type: 'paragraph', attrs: { id: 'three' } } }] })).toThrow(expect.objectContaining({ code: 'INVALID_OPERATION' }));
   });
+
+  it('rejects inline content inserted beside a top-level block', () => {
+    const doc = documentWith([{ type: 'paragraph', attrs: { id: 'one' } }]);
+    expect(() => applyBlockOperations(doc, { operations: [{
+      type: 'insertAfter',
+      target: 'one',
+      content: { type: 'mention', attrs: { entityType: 'user', entityId: 'user-1' } },
+    }] })).toThrow(expect.objectContaining({ code: 'INVALID_OPERATION' }));
+  });
+
+  it('validates attributes after an earlier operation renames a block', () => {
+    const doc = documentWith([{ type: 'paragraph', attrs: { id: 'one' } }]);
+    expect(() => applyBlockOperations(doc, { operations: [
+      { type: 'update', target: 'one', attrs: { id: 'renamed' } },
+      { type: 'update', target: 'renamed', attrs: { unsupported: true } },
+    ] })).toThrow(expect.objectContaining({ code: 'INVALID_BLOCK_SCHEMA' }));
+  });
 });
