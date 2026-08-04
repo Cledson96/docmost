@@ -11,7 +11,7 @@
 - `PersistenceExtension` carrega primeiro o estado Yjs salvo; sem ele, converte o JSON da página. Ao persistir, atualiza JSON ProseMirror, texto, estado Yjs, contribuidores e último editor.
 - A persistência é debounce de 10 segundos, com espera máxima de 45 segundos. Backlinks, menções, indexação de IA, watchers, notificações e histórico são efeitos posteriores, frequentemente enfileirados.
 - O estado em IndexedDB do client melhora uso offline/local, mas não substitui autorização ou o estado do servidor.
-- Os tipos TipTap que recebem `UniqueID` persistente são derivados de `richContentCapabilities` e `agentAddressableNodeTypes` em `apps/server/src/core/rich-content/rich-content-capabilities.ts`, usados por `apps/server/src/collaboration/collaboration.util.ts`; somente nós `blockAddressable` participam, em vez de uma lista literal local.
+- `packages/editor-ext/src/lib/unique-id/unique-id-node-types.ts` é a fonte compartilhada dos tipos TipTap com `UniqueID` persistente, consumida por todos os editores client/read-only e pelo servidor. `agentAddressableNodeTypes` em `apps/server/src/core/rich-content/rich-content-capabilities.ts` a filtra para nós `blockAddressable`, e `apps/server/src/collaboration/collaboration.util.ts` usa esse resultado.
 
 ## Escala E Eventos
 

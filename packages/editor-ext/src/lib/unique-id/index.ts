@@ -1,2 +1,3 @@
-export { UniqueID } from "./unique-id";
-export * from "./unique-id.util";
+export { UniqueID } from './unique-id';
+export { uniqueIdNodeTypes } from './unique-id-node-types';
+export * from './unique-id.util';

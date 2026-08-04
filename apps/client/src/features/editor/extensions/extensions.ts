@@ -54,6 +54,7 @@ import {
   Highlight,
   Indent,
   UniqueID,
+  uniqueIdNodeTypes,
   SharedStorage,
   Columns,
   Column,
@@ -182,7 +183,7 @@ export const mainExtensions = [
   SharedStorage,
   Heading,
   UniqueID.configure({
-    types: ["heading", "paragraph", "transclusionSource"],
+    types: [...uniqueIdNodeTypes],
     filterTransaction: (transaction) => !isChangeOrigin(transaction),
   }),
   Placeholder.configure({

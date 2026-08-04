@@ -1,8 +1,27 @@
+import { uniqueIdNodeTypes } from '@docmost/editor-ext';
+
 export type RichContentCapabilityCategory = 'node' | 'mark';
+export type RichContentAttributeType =
+  | 'string'
+  | 'number'
+  | 'integer'
+  | 'boolean'
+  | 'object'
+  | 'number | string';
+
+export type RichContentAttributeFormat =
+  | 'uri'
+  | 'identifier'
+  | 'mime-type'
+  | 'percentage-or-number'
+  | 'seconds';
 
 export interface RichContentAttribute {
   name: string;
   description: string;
+  type: RichContentAttributeType;
+  format?: RichContentAttributeFormat;
+  enum?: readonly string[];
   required?: boolean;
   validation?: string;
   transient?: boolean;
@@ -17,28 +36,78 @@ export interface RichContentCapability {
   constraints?: readonly string[];
 }
 
+type RichContentAttributeInput = Omit<RichContentAttribute, 'type'> & {
+  type?: RichContentAttributeType;
+};
+
+type RichContentCapabilityInput = Omit<
+  RichContentCapability,
+  'name' | 'category' | 'description' | 'attributes'
+> & {
+  attributes: readonly RichContentAttributeInput[];
+};
+
+const attributeMetadata: Record<
+  string,
+  Pick<RichContentAttribute, 'type' | 'format'>
+> = {
+  url: { type: 'string', format: 'uri' },
+  src: { type: 'string', format: 'uri' },
+  href: { type: 'string', format: 'uri' },
+  size: { type: 'number' },
+  width: { type: 'number | string', format: 'percentage-or-number' },
+  height: { type: 'number' },
+  aspectRatio: { type: 'number' },
+  start: { type: 'integer' },
+  open: { type: 'boolean' },
+  internal: { type: 'boolean' },
+  placeholder: { type: 'object' },
+  id: { type: 'string', format: 'identifier' },
+  pageId: { type: 'string', format: 'identifier' },
+  attachmentId: { type: 'string', format: 'identifier' },
+  sourcePageId: { type: 'string', format: 'identifier' },
+  transclusionId: { type: 'string', format: 'identifier' },
+  entityId: { type: 'string', format: 'identifier' },
+  creatorId: { type: 'string', format: 'identifier' },
+  slugId: { type: 'string', format: 'identifier' },
+  anchorId: { type: 'string', format: 'identifier' },
+  mime: { type: 'string', format: 'mime-type' },
+  pendingKey: { type: 'string', format: 'identifier' },
+  indent: { type: 'integer' },
+};
+
+const attributes = (
+  inputs: readonly RichContentAttributeInput[],
+): readonly RichContentAttribute[] =>
+  inputs.map((input) => ({
+    type: 'string',
+    ...attributeMetadata[input.name],
+    ...input,
+  }));
+
 const node = (
   name: string,
   description: string,
-  options: Omit<RichContentCapability, 'name' | 'category' | 'description'>,
+  options: RichContentCapabilityInput,
 ): RichContentCapability => ({
   name,
   category: 'node',
   description,
   ...options,
+  attributes: attributes(options.attributes),
 });
 
 const mark = (
   name: string,
   description: string,
-  attributes: readonly RichContentAttribute[] = [],
+  attributeInputs: readonly RichContentAttributeInput[] = [],
   constraints?: readonly string[],
 ): RichContentCapability => ({
   name,
   category: 'mark',
   blockAddressable: false,
   description,
-  attributes,
+  attributes: attributes(attributeInputs),
   constraints,
 });
 
@@ -113,8 +182,28 @@ export const richContentCapabilities = [
   node('columns', 'Multi-column layout container.', {
     blockAddressable: false,
     attributes: [
-      { name: 'layout', description: 'Column layout preset.' },
-      { name: 'widthMode', description: 'Column width mode.' },
+      {
+        name: 'layout',
+        description: 'Column layout preset.',
+        type: 'string',
+        enum: [
+          'two_equal',
+          'two_left_sidebar',
+          'two_right_sidebar',
+          'three_equal',
+          'three_left_wide',
+          'three_right_wide',
+          'three_with_sidebars',
+          'four_equal',
+          'five_equal',
+        ],
+      },
+      {
+        name: 'widthMode',
+        description: 'Column width mode.',
+        type: 'string',
+        enum: ['normal', 'wide'],
+      },
     ],
   }),
   node('details', 'Collapsible details block.', {
@@ -176,6 +265,7 @@ export const richContentCapabilities = [
       {
         name: 'level',
         description: 'Heading level.',
+        type: 'integer',
         validation: 'integer from 1 to 6',
       },
       { name: 'textAlign', description: 'Heading text alignment.' },
@@ -237,6 +327,8 @@ export const richContentCapabilities = [
       {
         name: 'entityType',
         description: 'Mention target type.',
+        type: 'string',
+        enum: ['user', 'page'],
         required: true,
       },
       {
@@ -372,13 +464,10 @@ export const richContentCapabilities = [
   }),
 ] as const satisfies readonly RichContentCapability[];
 
-export const agentAddressableNodeTypes = richContentCapabilities
-  .filter(
-    (
-      capability,
-    ): capability is RichContentCapability & {
-      category: 'node';
-      blockAddressable: true;
-    } => capability.category === 'node' && capability.blockAddressable,
-  )
-  .map((capability) => capability.name);
+export const agentAddressableNodeTypes = uniqueIdNodeTypes.filter((type) => {
+  const capability = richContentCapabilities.find(
+    (candidate) => candidate.name === type,
+  );
+
+  return capability?.category === 'node' && capability.blockAddressable;
+});

@@ -1,4 +1,5 @@
 import { getSchema } from '@tiptap/core';
+import { uniqueIdNodeTypes } from '@docmost/editor-ext';
 import {
   agentAddressableNodeTypes,
   richContentCapabilities,
@@ -91,6 +92,10 @@ describe('rich content capabilities', () => {
       expect(capability?.category).toBe('node');
       expect(capability?.blockAddressable).toBe(true);
     }
+  });
+
+  it('derives agent-addressable nodes from the shared UniqueID types', () => {
+    expect(agentAddressableNodeTypes).toEqual(uniqueIdNodeTypes);
   });
 
   it('registers every public capability in the TipTap schema', () => {
@@ -205,6 +210,46 @@ describe('rich content capabilities', () => {
         'video.placeholder',
       ].sort(),
     );
+  });
+
+  it('describes attribute types and closed domains useful to rich-content agents', () => {
+    const attribute = (capabilityName: string, attributeName: string) =>
+      richContentCapabilities
+        .find((capability) => capability.name === capabilityName)
+        ?.attributes.find((candidate) => candidate.name === attributeName);
+
+    expect(attribute('columns', 'layout')).toMatchObject({
+      type: 'string',
+      enum: [
+        'two_equal',
+        'two_left_sidebar',
+        'two_right_sidebar',
+        'three_equal',
+        'three_left_wide',
+        'three_right_wide',
+        'three_with_sidebars',
+        'four_equal',
+        'five_equal',
+      ],
+    });
+    expect(attribute('columns', 'widthMode')).toMatchObject({
+      type: 'string',
+      enum: ['normal', 'wide'],
+    });
+    expect(attribute('image', 'width')).toMatchObject({
+      type: 'number | string',
+      format: 'percentage-or-number',
+    });
+    expect(attribute('image', 'size')).toMatchObject({ type: 'number' });
+    expect(attribute('image', 'src')).toMatchObject({
+      type: 'string',
+      format: 'uri',
+    });
+    expect(attribute('attachment', 'attachmentId')).toMatchObject({
+      type: 'string',
+      format: 'identifier',
+    });
+    expect(attribute('details', 'open')).toMatchObject({ type: 'boolean' });
   });
 
   it('registers every agent-addressable type as a schema node, never a mark', () => {
