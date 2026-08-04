@@ -124,13 +124,19 @@ function inlineDirective(node: JSONContent) {
 async function replaceBlocks(markdown: string, extensions: Extensions, register: (content: JSONContent) => string) {
   const lines = markdown.split(/\r?\n/);
   const output: string[] = [];
+  let fence: MarkdownFence | undefined;
   for (let i = 0; i < lines.length; i++) {
+    fence = updateMarkdownFence(lines[i], fence);
+    if (fence) { output.push(lines[i]); continue; }
     const start = /^:::docmost-([A-Za-z][\w-]*)\s*$/.exec(lines[i]);
     if (!start) { output.push(lines[i]); continue; }
     const type = start[1];
     let depth = 1;
     let end = -1;
+    let nestedFence: MarkdownFence | undefined;
     for (let position = i + 1; position < lines.length; position++) {
+      nestedFence = updateMarkdownFence(lines[position], nestedFence);
+      if (nestedFence) continue;
       if (/^:::docmost-[A-Za-z][\w-]*\s*$/.test(lines[position])) depth++;
       if (lines[position] === ":::" && --depth === 0) { end = position; break; }
     }
@@ -162,16 +168,55 @@ async function blockFromDirective(type: string, metadata: string, body: string, 
 function replaceInline(markdown: string, extensions: Extensions, register: (content: JSONContent) => string) {
   const paired = /\{\{docmost:([A-Za-z][\w-]*) ([A-Za-z0-9_-]+)\}\}([\s\S]*?)\{\{\/docmost:\1\}\}/g;
   const atomic = /\{\{docmost:([A-Za-z][\w-]*) ([^}\s]+)\}\}/g;
-  const replacedPairs = markdown.replace(paired, (_all, type, payload, text) => {
-    assertInlineType(type, extensions, true);
-    const data = decode(payload);
-    return register({ type: "text", text, marks: [{ type, attrs: data.attrs }] });
+  return transformOutsideMarkdownFences(markdown, (outsideFence) => {
+    const replacedPairs = outsideFence.replace(paired, (_all, type, payload, text) => {
+      assertInlineType(type, extensions, true);
+      const data = decode(payload);
+      return register({ type: "text", text, marks: [{ type, attrs: data.attrs }] });
+    });
+    return replacedPairs.replace(atomic, (_all, type, payload) => {
+      assertInlineType(type, extensions, false);
+      const data = decode(payload);
+      return register({ type, attrs: data.attrs });
+    });
   });
-  return replacedPairs.replace(atomic, (_all, type, payload) => {
-    assertInlineType(type, extensions, false);
-    const data = decode(payload);
-    return register({ type, attrs: data.attrs });
-  });
+}
+
+type MarkdownFence = { marker: "`" | "~"; length: number };
+
+function updateMarkdownFence(line: string, activeFence: MarkdownFence | undefined): MarkdownFence | undefined {
+  if (activeFence) {
+    const closing = new RegExp(`^ {0,3}${activeFence.marker}{${activeFence.length},}[ \\t]*$`);
+    return closing.test(line) ? undefined : activeFence;
+  }
+  const opening = /^ {0,3}(`{3,}|~{3,})/.exec(line)?.[1];
+  return opening ? { marker: opening[0] as MarkdownFence["marker"], length: opening.length } : undefined;
+}
+
+function transformOutsideMarkdownFences(markdown: string, transform: (value: string) => string) {
+  const lines = markdown.split(/(\r?\n)/);
+  const output: string[] = [];
+  let outsideFence = "";
+  let fence: MarkdownFence | undefined;
+  const flush = () => {
+    if (outsideFence) output.push(transform(outsideFence));
+    outsideFence = "";
+  };
+
+  for (let index = 0; index < lines.length; index += 2) {
+    const line = lines[index];
+    const newline = lines[index + 1] ?? "";
+    const nextFence = updateMarkdownFence(line, fence);
+    if (fence || nextFence) {
+      flush();
+      output.push(line, newline);
+      fence = nextFence;
+    } else {
+      outsideFence += line + newline;
+    }
+  }
+  flush();
+  return output.join("");
 }
 
 function restoreTokens(node: JSONContent, replacements: Replacement[]): JSONContent {

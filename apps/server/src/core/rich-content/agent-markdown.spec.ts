@@ -106,6 +106,42 @@ describe('agent markdown', () => {
     expect(prosemirrorToAgentMarkdown(doc, tiptapExtensions)).toContain('# Title');
   });
 
+  it('keeps block directives literal inside fenced code blocks', async () => {
+    const markdown = '```yaml\n:::docmost-subpages\nid: null\nattrs: {}\n:::\n```';
+
+    const doc = await agentMarkdownToProsemirror(markdown, tiptapExtensions);
+
+    expect(doc).toMatchObject({
+      type: 'doc',
+      content: [{
+        type: 'codeBlock',
+        attrs: { language: 'yaml' },
+        content: [{ type: 'text', text: ':::docmost-subpages\nid: null\nattrs: {}\n:::\n' }],
+      }],
+    });
+    expect(prosemirrorToAgentMarkdown(doc, tiptapExtensions)).toContain(':::docmost-subpages\nid: null\nattrs: {}\n:::');
+  });
+
+  it('keeps inline directives literal inside fenced code blocks', async () => {
+    const payload = Buffer.from(JSON.stringify({
+      id: null,
+      attrs: { text: 'In progress', color: 'blue' },
+    })).toString('base64url');
+    const markdown = `~~~text\n{{docmost:status ${payload}}}\n~~~`;
+
+    const doc = await agentMarkdownToProsemirror(markdown, tiptapExtensions);
+
+    expect(doc).toMatchObject({
+      type: 'doc',
+      content: [{
+        type: 'codeBlock',
+        attrs: { language: 'text' },
+        content: [{ type: 'text', text: `{{docmost:status ${payload}}}\n` }],
+      }],
+    });
+    expect(prosemirrorToAgentMarkdown(doc, tiptapExtensions)).toContain(`{{docmost:status ${payload}}}`);
+  });
+
   it.each([
     [':::docmost-unknown\nid: null\nattrs: {}\n:::', 'UNKNOWN_TYPE'],
     [':::docmost-embed\nid: [not valid\nattrs: {}\n:::', 'INVALID_YAML'],
