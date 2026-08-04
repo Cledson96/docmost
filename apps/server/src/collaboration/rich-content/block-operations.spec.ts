@@ -61,4 +61,26 @@ describe('applyBlockOperations', () => {
     expect((doc.getXmlFragment('default').get(0) as any).getAttribute('id')).toBe('promoted');
     expect(() => applyBlockOperations(doc, { operations: [{ type: 'delete', target: 'missing' }] })).toThrow(expect.objectContaining({ code: 'BLOCK_NOT_FOUND' }));
   });
+
+  it('preserves bold and link marks when moving formatted paragraph content', () => {
+    const doc = documentWith([
+      { type: 'paragraph', attrs: { id: 'one' }, content: [
+        { type: 'text', text: 'Bold', marks: [{ type: 'bold' }] },
+        { type: 'text', text: ' link', marks: [{ type: 'link', attrs: { href: 'https://example.com', target: '_blank' } }] },
+      ] },
+      { type: 'paragraph', attrs: { id: 'two' } },
+    ]);
+    applyBlockOperations(doc, { operations: [{ type: 'move', target: 'one', destination: 'two', position: 'after' }] });
+    const moved: any = TiptapTransformer.fromYdoc(doc, 'default');
+    expect(moved.content[1].content).toEqual(expect.arrayContaining([
+      expect.objectContaining({ text: 'Bold', marks: expect.arrayContaining([expect.objectContaining({ type: 'bold' })]) }),
+      expect.objectContaining({ text: ' link', marks: expect.arrayContaining([expect.objectContaining({ type: 'link', attrs: expect.objectContaining({ href: 'https://example.com' }) })]) }),
+    ]));
+  });
+
+  it('rejects update id collisions and inserting into leaf paragraph nodes', () => {
+    const doc = documentWith([{ type: 'paragraph', attrs: { id: 'one' } }, { type: 'paragraph', attrs: { id: 'two' } }]);
+    expect(() => applyBlockOperations(doc, { operations: [{ type: 'update', target: 'one', attrs: { id: 'two' } }] })).toThrow(expect.objectContaining({ code: 'DUPLICATE_BLOCK_ID' }));
+    expect(() => applyBlockOperations(doc, { operations: [{ type: 'insertIn', target: 'one', content: { type: 'paragraph', attrs: { id: 'three' } } }] })).toThrow(expect.objectContaining({ code: 'INVALID_OPERATION' }));
+  });
 });
