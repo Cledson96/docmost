@@ -11,6 +11,9 @@
   "module": "./src/index.ts",
   "types": "dist/index.d.ts",
   "dependencies": {
+    "@tiptap/core": "3.27.1",
+    "@tiptap/html": "3.27.1",
+    "js-yaml": "4.1.1",
     "marked": "17.0.5"
   }
 }
