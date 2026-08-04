@@ -23,6 +23,64 @@ vi.mock("@/features/workspace/queries/workspace-query.ts", () => ({
   }),
 }));
 vi.mock("@/ee/components/sso-login.tsx", () => ({ default: () => null }));
+vi.mock("@/components/layouts/global/layout.tsx", async () => {
+  const { Outlet } = await import("react-router-dom");
+
+  return { default: () => <Outlet /> };
+});
+vi.mock("@/features/page/queries/page-query", () => ({
+  usePageQuery: () => ({
+    data: {
+      id: "page-id",
+      title: "Workspace page",
+      content: {},
+      slugId: "page-id",
+      space: { slug: "workspace" },
+      permissions: { canEdit: true },
+      isBase: false,
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+vi.mock("@/features/space/queries/space-query", () => ({
+  useGetSpaceBySlugQuery: () => ({
+    data: { settings: { comments: { allowViewerComments: false } } },
+  }),
+}));
+vi.mock("@/features/editor/title-editor", () => ({
+  TitleEditor: () => null,
+}));
+vi.mock("@/features/editor/full-editor", () => ({
+  FullEditor: () => <div data-testid="full-editor" />,
+}));
+vi.mock("@/features/editor/readonly-page-editor.tsx", () => ({
+  default: () => <div data-testid="readonly-page-editor" />,
+}));
+vi.mock("@/features/share/queries/share-query.ts", () => ({
+  useSharePageQuery: () => ({
+    data: {
+      page: { id: "shared-page-id", title: "Shared page", content: {} },
+      share: { id: "share-id", key: "share-key", searchIndexing: false },
+      features: [],
+    },
+    isLoading: false,
+    isError: false,
+  }),
+}));
+vi.mock("@/features/share/components/share-layout.tsx", async () => {
+  const { Outlet } = await import("react-router-dom");
+
+  return { default: () => <Outlet /> };
+});
+vi.mock("@/features/page-history/components/history-modal", () => ({
+  default: () => null,
+}));
+vi.mock("@/features/page/components/header/page-header.tsx", () => ({
+  default: () => null,
+}));
+vi.mock("@/ee/base/components/base-view", () => ({ BaseView: () => null }));
+vi.mock("@/ee/hooks/use-feature", () => ({ useHasFeature: () => false }));
 vi.mock("@/main.tsx", async () => {
   const { QueryClient } = await import("@tanstack/react-query");
 
@@ -70,4 +128,32 @@ it("renders a lazy route page through the shared suspense boundary", async () =>
   expect(
     (await screen.findByRole("heading", { name: /login/i })).textContent,
   ).toMatch(/login/i);
+});
+
+it("loads the full editor for a resolved workspace page route", async () => {
+  render(
+    <MemoryRouter initialEntries={["/s/workspace/p/workspace-page-id"]}>
+      <MantineProvider>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </MantineProvider>
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByTestId("full-editor")).toBeTruthy();
+});
+
+it("loads the readonly editor for a shared page route", async () => {
+  render(
+    <MemoryRouter initialEntries={["/share/share-key/p/shared-page-slug"]}>
+      <MantineProvider>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </MantineProvider>
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByTestId("readonly-page-editor")).toBeTruthy();
 });
