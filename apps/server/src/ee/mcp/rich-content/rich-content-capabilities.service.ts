@@ -14,7 +14,10 @@ export class RichContentCapabilitiesService {
             ...capability,
             attributes: capability.attributes.map((attribute) =>
               attribute.name === 'provider'
-                ? { ...attribute, enum: embedProviders.map((provider) => provider.id) }
+                ? {
+                    ...attribute,
+                    enum: embedProviders.map((provider) => provider.id),
+                  }
                 : attribute,
             ),
           }

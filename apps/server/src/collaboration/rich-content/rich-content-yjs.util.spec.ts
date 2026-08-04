@@ -1,8 +1,5 @@
 import * as Y from 'yjs';
-import {
-  revisionForDocument,
-  snapshotDocument,
-} from './rich-content-yjs.util';
+import { revisionForDocument, snapshotDocument } from './rich-content-yjs.util';
 
 describe('rich content Yjs snapshots', () => {
   it('changes revision only when the Yjs state changes', () => {

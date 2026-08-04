@@ -53,7 +53,10 @@ import {
   tiptapExtensions,
 } from '../../collaboration/collaboration.util';
 import { sql } from 'kysely';
-import { agentMarkdownToProsemirror, markdownToHtml } from '@docmost/editor-ext';
+import {
+  agentMarkdownToProsemirror,
+  markdownToHtml,
+} from '@docmost/editor-ext';
 import { Page, User, Workspace } from '@docmost/db/types/entity.types';
 import { AuditEvent, AuditResource } from '../../common/events/audit-events';
 import {
@@ -188,7 +191,10 @@ export class McpService {
             content: [
               {
                 type: 'text',
-                text: typeof result === 'string' ? result : JSON.stringify(result, null, 2),
+                text:
+                  typeof result === 'string'
+                    ? result
+                    : JSON.stringify(result, null, 2),
               },
             ],
           },
@@ -278,12 +284,19 @@ export class McpService {
   }
 
   private isRichContentTool(name: string): boolean {
-    return ['edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments'].includes(name);
+    return [
+      'edit_page_blocks',
+      'list_child_pages',
+      'search_users',
+      'list_page_attachments',
+    ].includes(name);
   }
 
   private assertRichContentEnabled(workspace: Workspace): void {
     if (!this.isRichContentEnabled(workspace)) {
-      throw new ForbiddenException('MCP rich content is disabled for this workspace');
+      throw new ForbiddenException(
+        'MCP rich content is disabled for this workspace',
+      );
     }
   }
 
@@ -301,8 +314,14 @@ export class McpService {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Page ID or slug ID' },
-            limit: { type: 'number', description: 'Max comments. Defaults to 20.' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: {
+              type: 'number',
+              description: 'Max comments. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
           },
           required: ['pageId'],
         },
@@ -326,7 +345,10 @@ export class McpService {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Page ID or slug ID' },
-            content: { type: 'string', description: 'Comment body in markdown' },
+            content: {
+              type: 'string',
+              description: 'Comment body in markdown',
+            },
             parentCommentId: {
               type: 'string',
               description: 'Optional comment ID to reply to',
@@ -342,7 +364,10 @@ export class McpService {
           type: 'object',
           properties: {
             commentId: { type: 'string', description: 'Comment ID' },
-            content: { type: 'string', description: 'New comment body in markdown' },
+            content: {
+              type: 'string',
+              description: 'New comment body in markdown',
+            },
           },
           required: ['commentId', 'content'],
         },
@@ -350,7 +375,7 @@ export class McpService {
       {
         name: 'delete_comment',
         description:
-          'Delete a comment. You can delete your own comments; deleting someone else\'s requires space admin.',
+          "Delete a comment. You can delete your own comments; deleting someone else's requires space admin.",
         inputSchema: {
           type: 'object',
           properties: {
@@ -368,7 +393,10 @@ export class McpService {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Page ID or slug ID' },
-            limit: { type: 'number', description: 'Max labels. Defaults to 20.' },
+            limit: {
+              type: 'number',
+              description: 'Max labels. Defaults to 20.',
+            },
           },
           required: ['pageId'],
         },
@@ -408,8 +436,14 @@ export class McpService {
         inputSchema: {
           type: 'object',
           properties: {
-            limit: { type: 'number', description: 'Max labels. Defaults to 20.' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: {
+              type: 'number',
+              description: 'Max labels. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
           },
         },
       },
@@ -421,9 +455,18 @@ export class McpService {
           type: 'object',
           properties: {
             labelId: { type: 'string', description: 'Label ID' },
-            name: { type: 'string', description: 'Label name, if the ID is unknown' },
-            spaceId: { type: 'string', description: 'Optional space to restrict to' },
-            limit: { type: 'number', description: 'Max pages. Defaults to 20.' },
+            name: {
+              type: 'string',
+              description: 'Label name, if the ID is unknown',
+            },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space to restrict to',
+            },
+            limit: {
+              type: 'number',
+              description: 'Max pages. Defaults to 20.',
+            },
           },
         },
       },
@@ -431,7 +474,7 @@ export class McpService {
       // --- favorites ---
       {
         name: 'list_favorites',
-        description: 'List the authenticated user\'s favorites.',
+        description: "List the authenticated user's favorites.",
         inputSchema: {
           type: 'object',
           properties: {
@@ -441,7 +484,10 @@ export class McpService {
               description: 'Optional type filter',
             },
             spaceId: { type: 'string', description: 'Optional space filter' },
-            limit: { type: 'number', description: 'Max favorites. Defaults to 20.' },
+            limit: {
+              type: 'number',
+              description: 'Max favorites. Defaults to 20.',
+            },
           },
         },
       },
@@ -453,9 +499,18 @@ export class McpService {
           type: 'object',
           properties: {
             type: { type: 'string', enum: ['page', 'space', 'template'] },
-            pageId: { type: 'string', description: 'Required when type is page' },
-            spaceId: { type: 'string', description: 'Required when type is space' },
-            templateId: { type: 'string', description: 'Required when type is template' },
+            pageId: {
+              type: 'string',
+              description: 'Required when type is page',
+            },
+            spaceId: {
+              type: 'string',
+              description: 'Required when type is space',
+            },
+            templateId: {
+              type: 'string',
+              description: 'Required when type is template',
+            },
           },
           required: ['type'],
         },
@@ -467,9 +522,18 @@ export class McpService {
           type: 'object',
           properties: {
             type: { type: 'string', enum: ['page', 'space', 'template'] },
-            pageId: { type: 'string', description: 'Required when type is page' },
-            spaceId: { type: 'string', description: 'Required when type is space' },
-            templateId: { type: 'string', description: 'Required when type is template' },
+            pageId: {
+              type: 'string',
+              description: 'Required when type is page',
+            },
+            spaceId: {
+              type: 'string',
+              description: 'Required when type is space',
+            },
+            templateId: {
+              type: 'string',
+              description: 'Required when type is template',
+            },
           },
           required: ['type'],
         },
@@ -483,8 +547,14 @@ export class McpService {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Page ID or slug ID' },
-            limit: { type: 'number', description: 'Max versions. Defaults to 20.' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: {
+              type: 'number',
+              description: 'Max versions. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
           },
           required: ['pageId'],
         },
@@ -496,7 +566,10 @@ export class McpService {
         inputSchema: {
           type: 'object',
           properties: {
-            historyId: { type: 'string', description: 'Version ID from list_page_history' },
+            historyId: {
+              type: 'string',
+              description: 'Version ID from list_page_history',
+            },
             format: {
               type: 'string',
               enum: ['markdown', 'html', 'json'],
@@ -508,13 +581,20 @@ export class McpService {
       },
       {
         name: 'list_trash',
-        description: 'List the deleted pages of a space. Requires edit permission on the space.',
+        description:
+          'List the deleted pages of a space. Requires edit permission on the space.',
         inputSchema: {
           type: 'object',
           properties: {
             spaceId: { type: 'string', description: 'Space ID' },
-            limit: { type: 'number', description: 'Max pages. Defaults to 20.' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: {
+              type: 'number',
+              description: 'Max pages. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
           },
           required: ['spaceId'],
         },
@@ -525,7 +605,10 @@ export class McpService {
         inputSchema: {
           type: 'object',
           properties: {
-            pageId: { type: 'string', description: 'Page ID of a trashed page' },
+            pageId: {
+              type: 'string',
+              description: 'Page ID of a trashed page',
+            },
           },
           required: ['pageId'],
         },
@@ -540,10 +623,14 @@ export class McpService {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Page ID to move' },
-            position: { type: 'string', description: 'New fractional index position' },
+            position: {
+              type: 'string',
+              description: 'New fractional index position',
+            },
             parentPageId: {
               type: 'string',
-              description: 'New parent page ID. Omit to keep the current parent.',
+              description:
+                'New parent page ID. Omit to keep the current parent.',
             },
           },
           required: ['pageId', 'position'],
@@ -602,7 +689,10 @@ export class McpService {
               enum: ['incoming', 'outgoing'],
               description: 'Link direction. Defaults to incoming.',
             },
-            limit: { type: 'number', description: 'Max links. Defaults to 20.' },
+            limit: {
+              type: 'number',
+              description: 'Max links. Defaults to 20.',
+            },
           },
           required: ['pageId'],
         },
@@ -610,13 +700,19 @@ export class McpService {
       {
         name: 'list_recent_pages',
         description:
-          'List recently updated pages, across the user\'s spaces or within one space.',
+          "List recently updated pages, across the user's spaces or within one space.",
         inputSchema: {
           type: 'object',
           properties: {
             spaceId: { type: 'string', description: 'Optional space filter' },
-            limit: { type: 'number', description: 'Max pages. Defaults to 20.' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: {
+              type: 'number',
+              description: 'Max pages. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
           },
         },
       },
@@ -630,8 +726,14 @@ export class McpService {
           type: 'object',
           properties: {
             spaceId: { type: 'string', description: 'Optional space filter' },
-            limit: { type: 'number', description: 'Max templates. Defaults to 20.' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
+            limit: {
+              type: 'number',
+              description: 'Max templates. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
           },
         },
       },
@@ -654,10 +756,19 @@ export class McpService {
           type: 'object',
           properties: {
             title: { type: 'string', description: 'Template title' },
-            content: { type: 'string', description: 'Template body in markdown' },
-            description: { type: 'string', description: 'Optional description' },
+            content: {
+              type: 'string',
+              description: 'Template body in markdown',
+            },
+            description: {
+              type: 'string',
+              description: 'Optional description',
+            },
             icon: { type: 'string', description: 'Optional icon' },
-            spaceId: { type: 'string', description: 'Optional space to scope it to' },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space to scope it to',
+            },
           },
           required: ['title'],
         },
@@ -670,8 +781,14 @@ export class McpService {
           properties: {
             templateId: { type: 'string', description: 'Template ID' },
             title: { type: 'string', description: 'Optional new title' },
-            content: { type: 'string', description: 'Optional new body in markdown' },
-            description: { type: 'string', description: 'Optional new description' },
+            content: {
+              type: 'string',
+              description: 'Optional new body in markdown',
+            },
+            description: {
+              type: 'string',
+              description: 'Optional new description',
+            },
             icon: { type: 'string', description: 'Optional new icon' },
           },
           required: ['templateId'],
@@ -695,8 +812,14 @@ export class McpService {
           type: 'object',
           properties: {
             templateId: { type: 'string', description: 'Template ID' },
-            spaceId: { type: 'string', description: 'Space to create the page in' },
-            parentPageId: { type: 'string', description: 'Optional parent page ID' },
+            spaceId: {
+              type: 'string',
+              description: 'Space to create the page in',
+            },
+            parentPageId: {
+              type: 'string',
+              description: 'Optional parent page ID',
+            },
           },
           required: ['templateId', 'spaceId'],
         },
@@ -711,7 +834,10 @@ export class McpService {
           type: 'object',
           properties: {
             query: { type: 'string', description: 'Search term' },
-            spaceId: { type: 'string', description: 'Optional space to restrict to' },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space to restrict to',
+            },
           },
           required: ['query'],
         },
@@ -745,7 +871,8 @@ export class McpService {
             },
             contentBase64: {
               type: 'string',
-              description: 'File bytes, base64 encoded, without a data: URI prefix',
+              description:
+                'File bytes, base64 encoded, without a data: URI prefix',
             },
           },
           required: ['pageId', 'fileName', 'contentBase64'],
@@ -789,7 +916,10 @@ export class McpService {
         inputSchema: {
           type: 'object',
           properties: {
-            spaceId: { type: 'string', description: 'Optional space ID filter' },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space ID filter',
+            },
           },
         },
       },
@@ -820,17 +950,75 @@ export class McpService {
           additionalProperties: false,
           properties: {
             pageId: { type: 'string', description: 'Page ID or slug ID' },
-            expectedRevision: { type: 'string', description: 'Revision returned by get_page' },
+            expectedRevision: {
+              type: 'string',
+              description: 'Revision returned by get_page',
+            },
             operations: {
               type: 'array',
               maxItems: 50,
               items: {
                 oneOf: [
-                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'content'], properties: { type: { enum: ['insertBefore', 'insertAfter', 'insertIn'] }, target: { type: 'string' }, content: { type: 'string', description: 'One block of Agent Markdown' } } },
-                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'attrs'], properties: { type: { const: 'update' }, target: { type: 'string' }, attrs: { type: 'object' } } },
-                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'destination'], properties: { type: { const: 'move' }, target: { type: 'string' }, destination: { type: 'string' }, position: { enum: ['before', 'after', 'in'] } } },
-                  { type: 'object', additionalProperties: false, required: ['type', 'target'], properties: { type: { const: 'delete' }, target: { type: 'string' } } },
-                  { type: 'object', additionalProperties: false, required: ['type', 'target', 'from', 'to', 'content'], properties: { type: { const: 'replaceRange' }, target: { type: 'string' }, from: { type: 'integer', minimum: 0 }, to: { type: 'integer', minimum: 0 }, content: { type: 'string', description: 'Agent Markdown blocks' } } },
+                  {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['type', 'target', 'content'],
+                    properties: {
+                      type: {
+                        enum: ['insertBefore', 'insertAfter', 'insertIn'],
+                      },
+                      target: { type: 'string' },
+                      content: {
+                        type: 'string',
+                        description: 'One block of Agent Markdown',
+                      },
+                    },
+                  },
+                  {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['type', 'target', 'attrs'],
+                    properties: {
+                      type: { const: 'update' },
+                      target: { type: 'string' },
+                      attrs: { type: 'object' },
+                    },
+                  },
+                  {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['type', 'target', 'destination'],
+                    properties: {
+                      type: { const: 'move' },
+                      target: { type: 'string' },
+                      destination: { type: 'string' },
+                      position: { enum: ['before', 'after', 'in'] },
+                    },
+                  },
+                  {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['type', 'target'],
+                    properties: {
+                      type: { const: 'delete' },
+                      target: { type: 'string' },
+                    },
+                  },
+                  {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['type', 'target', 'from', 'to', 'content'],
+                    properties: {
+                      type: { const: 'replaceRange' },
+                      target: { type: 'string' },
+                      from: { type: 'integer', minimum: 0 },
+                      to: { type: 'integer', minimum: 0 },
+                      content: {
+                        type: 'string',
+                        description: 'Agent Markdown blocks',
+                      },
+                    },
+                  },
                 ],
               },
             },
@@ -841,31 +1029,68 @@ export class McpService {
       {
         name: 'list_page_attachments',
         description: 'List attachments on a page the caller can view.',
-        inputSchema: { type: 'object', properties: {
-          pageId: { type: 'string', description: 'Page ID or slug ID' },
-          limit: { type: 'number', description: 'Max attachments. Defaults to 20.' },
-          cursor: { type: 'string', description: 'Cursor from a previous response' },
-        }, required: ['pageId'] },
-      },
-      {
-        name: 'search_users',
-        description: 'Search active users in the current workspace by name or email.',
-        inputSchema: { type: 'object', properties: {
-          query: { type: 'string', description: 'Optional name or email query' },
-          limit: { type: 'number', description: 'Max users. Defaults to 20.' },
-          cursor: { type: 'string', description: 'Cursor from a previous response' },
-        } },
-      },
-      {
-        name: 'list_child_pages',
-        description: 'List the accessible direct children of a parent page in sidebar position order. Set depth to include descendants (maximum 5).',
         inputSchema: {
           type: 'object',
           properties: {
-            parentPageId: { type: 'string', description: 'Required parent page ID or slug ID' },
-            cursor: { type: 'string', description: 'Cursor from a previous response' },
-            limit: { type: 'number', description: 'Children per page, from 1 to 100. Defaults to 20.' },
-            depth: { type: 'number', description: 'Nested levels to include, from 1 to 5. Defaults to 1.' },
+            pageId: { type: 'string', description: 'Page ID or slug ID' },
+            limit: {
+              type: 'number',
+              description: 'Max attachments. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
+          },
+          required: ['pageId'],
+        },
+      },
+      {
+        name: 'search_users',
+        description:
+          'Search active users in the current workspace by name or email.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Optional name or email query',
+            },
+            limit: {
+              type: 'number',
+              description: 'Max users. Defaults to 20.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
+          },
+        },
+      },
+      {
+        name: 'list_child_pages',
+        description:
+          'List the accessible direct children of a parent page in sidebar position order. Set depth to include descendants (maximum 5).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            parentPageId: {
+              type: 'string',
+              description: 'Required parent page ID or slug ID',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous response',
+            },
+            limit: {
+              type: 'number',
+              description: 'Children per page, from 1 to 100. Defaults to 20.',
+            },
+            depth: {
+              type: 'number',
+              description:
+                'Nested levels to include, from 1 to 5. Defaults to 1.',
+            },
           },
           required: ['parentPageId'],
         },
@@ -877,9 +1102,18 @@ export class McpService {
           type: 'object',
           properties: {
             title: { type: 'string', description: 'Page title' },
-            content: { type: 'string', description: 'Markdown content of the page' },
-            spaceId: { type: 'string', description: 'Space ID where page will be created' },
-            parentPageId: { type: 'string', description: 'Optional parent page ID' },
+            content: {
+              type: 'string',
+              description: 'Markdown content of the page',
+            },
+            spaceId: {
+              type: 'string',
+              description: 'Space ID where page will be created',
+            },
+            parentPageId: {
+              type: 'string',
+              description: 'Optional parent page ID',
+            },
           },
           required: ['title', 'spaceId'],
         },
@@ -892,11 +1126,15 @@ export class McpService {
           properties: {
             pageId: { type: 'string', description: 'Page ID to update' },
             title: { type: 'string', description: 'Optional new title' },
-            content: { type: 'string', description: 'Optional markdown content' },
+            content: {
+              type: 'string',
+              description: 'Optional markdown content',
+            },
             operation: {
               type: 'string',
               enum: ['append', 'prepend', 'replace'],
-              description: 'Content operation: append (default), prepend, or replace',
+              description:
+                'Content operation: append (default), prepend, or replace',
             },
           },
           required: ['pageId'],
@@ -925,7 +1163,10 @@ export class McpService {
               type: 'string',
               description: 'Optional space ID to restrict the search to',
             },
-            limit: { type: 'number', description: 'Max results. Defaults to 25.' },
+            limit: {
+              type: 'number',
+              description: 'Max results. Defaults to 25.',
+            },
           },
           required: ['query'],
         },
@@ -951,8 +1192,14 @@ export class McpService {
               description:
                 'The question or idea to look for, in natural language. Full sentences work better here than keywords.',
             },
-            spaceId: { type: 'string', description: 'Optional space to restrict to' },
-            limit: { type: 'number', description: 'Max pages. Defaults to 10.' },
+            spaceId: {
+              type: 'string',
+              description: 'Optional space to restrict to',
+            },
+            limit: {
+              type: 'number',
+              description: 'Max pages. Defaults to 10.',
+            },
             minSimilarity: {
               type: 'number',
               description:
@@ -971,7 +1218,8 @@ export class McpService {
           properties: {
             batchSize: {
               type: 'number',
-              description: 'Pages to index in this call. Defaults to 25, max 100.',
+              description:
+                'Pages to index in this call. Defaults to 25, max 100.',
             },
           },
         },
@@ -1008,7 +1256,10 @@ export class McpService {
               type: 'string',
               description: 'Space ID. Required unless parentPageId is given.',
             },
-            parentPageId: { type: 'string', description: 'Optional parent page ID' },
+            parentPageId: {
+              type: 'string',
+              description: 'Optional parent page ID',
+            },
             template: {
               type: 'string',
               enum: ['kanban', 'table'],
@@ -1020,7 +1271,8 @@ export class McpService {
       },
       {
         name: 'list_bases',
-        description: 'List all bases in a space, with their properties and views.',
+        description:
+          'List all bases in a space, with their properties and views.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1116,7 +1368,8 @@ export class McpService {
       },
       {
         name: 'update_base_property',
-        description: 'Rename a property, change its type, or change its typeOptions.',
+        description:
+          'Rename a property, change its type, or change its typeOptions.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1128,7 +1381,10 @@ export class McpService {
               enum: BASE_PROPERTY_TYPES,
               description: 'Optional new type',
             },
-            typeOptions: { type: 'object', description: 'Optional new type options' },
+            typeOptions: {
+              type: 'object',
+              description: 'Optional new type options',
+            },
           },
           required: ['pageId', 'propertyId'],
         },
@@ -1154,7 +1410,10 @@ export class McpService {
           properties: {
             pageId: { type: 'string', description: 'Base page ID' },
             propertyId: { type: 'string', description: 'Property ID' },
-            position: { type: 'string', description: 'New fractional index position' },
+            position: {
+              type: 'string',
+              description: 'New fractional index position',
+            },
           },
           required: ['pageId', 'propertyId', 'position'],
         },
@@ -1169,7 +1428,8 @@ export class McpService {
             pageId: { type: 'string', description: 'Base page ID' },
             cells: {
               type: 'object',
-              description: 'Cell values keyed by property ID, e.g. { "a1b2c3d4": "My task" }',
+              description:
+                'Cell values keyed by property ID, e.g. { "a1b2c3d4": "My task" }',
             },
           },
           required: ['pageId'],
@@ -1195,8 +1455,14 @@ export class McpService {
           type: 'object',
           properties: {
             pageId: { type: 'string', description: 'Base page ID' },
-            limit: { type: 'number', description: 'Max rows to return. Defaults to 50.' },
-            cursor: { type: 'string', description: 'Cursor from a previous meta.nextCursor' },
+            limit: {
+              type: 'number',
+              description: 'Max rows to return. Defaults to 50.',
+            },
+            cursor: {
+              type: 'string',
+              description: 'Cursor from a previous meta.nextCursor',
+            },
             filter: {
               type: 'object',
               description:
@@ -1260,7 +1526,10 @@ export class McpService {
           properties: {
             pageId: { type: 'string', description: 'Base page ID' },
             rowId: { type: 'string', description: 'Row ID' },
-            position: { type: 'string', description: 'New fractional index position' },
+            position: {
+              type: 'string',
+              description: 'New fractional index position',
+            },
           },
           required: ['pageId', 'rowId', 'position'],
         },
@@ -1301,7 +1570,8 @@ export class McpService {
       },
       {
         name: 'update_base_view',
-        description: 'Rename a view, change its type, or update its configuration.',
+        description:
+          'Rename a view, change its type, or update its configuration.',
         inputSchema: {
           type: 'object',
           properties: {
@@ -1313,7 +1583,10 @@ export class McpService {
               enum: BASE_VIEW_TYPES,
               description: 'Optional new view type',
             },
-            config: { type: 'object', description: 'Optional new configuration' },
+            config: {
+              type: 'object',
+              description: 'Optional new configuration',
+            },
           },
           required: ['pageId', 'viewId'],
         },
@@ -1389,7 +1662,10 @@ export class McpService {
     switch (name) {
       case 'get_content_capabilities':
         if (!this.isRichContentEnabled(workspace)) {
-          return { enabled: false, message: 'MCP rich content is disabled for this workspace' };
+          return {
+            enabled: false,
+            message: 'MCP rich content is disabled for this workspace',
+          };
         }
         return {
           enabled: true,
@@ -1451,7 +1727,9 @@ export class McpService {
           .limit(100)
           .execute();
 
-        return { pages: await this.filterRestrictedPages(pages, user, args.spaceId) };
+        return {
+          pages: await this.filterRestrictedPages(pages, user, args.spaceId),
+        };
       }
 
       case 'get_page': {
@@ -1475,9 +1753,13 @@ export class McpService {
           format,
           content:
             format === 'markdown'
-              ? richContent?.content ?? this.renderPageContent(page.content, format)
+              ? (richContent?.content ??
+                this.renderPageContent(page.content, format))
               : this.renderPageContent(page.content, format),
-          ...(richContent && { revision: richContent.revision, blocks: richContent.blocks }),
+          ...(richContent && {
+            revision: richContent.revision,
+            blocks: richContent.blocks,
+          }),
           createdAt: page.createdAt,
           updatedAt: page.updatedAt,
         };
@@ -1489,12 +1771,19 @@ export class McpService {
 
       case 'search_users':
         this.assertRichContentEnabled(workspace);
-        return this.userRepo.getUsersPaginated(workspace.id, this.pagination(args));
+        return this.userRepo.getUsersPaginated(
+          workspace.id,
+          this.pagination(args),
+        );
 
       case 'list_child_pages': {
         this.assertRichContentEnabled(workspace);
-        if (!args.parentPageId) throw new BadRequestException('parentPageId is required');
-        const parent = await this.getPageInWorkspace(args.parentPageId, workspace);
+        if (!args.parentPageId)
+          throw new BadRequestException('parentPageId is required');
+        const parent = await this.getPageInWorkspace(
+          args.parentPageId,
+          workspace,
+        );
         await this.pageAccessService.validateCanView(parent, user);
         return this.listChildPages(parent, user, args);
       }
@@ -1651,7 +1940,11 @@ export class McpService {
     }
   }
 
-  private async getRichPageContent(page: Page, user: User, workspace: Workspace) {
+  private async getRichPageContent(
+    page: Page,
+    user: User,
+    workspace: Workspace,
+  ) {
     const snapshot = await this.collaborationGateway.handleYjsEvent(
       'getPageSnapshot',
       `page.${page.id}`,
@@ -1667,7 +1960,14 @@ export class McpService {
   private async listChildPages(parent: Page, user: User, args: any) {
     const limit = this.childPageLimit(args.limit);
     const depth = this.childPageDepth(args.depth);
-    return this.readChildPageLevel(parent, user, limit, args.cursor, depth, new Set());
+    return this.readChildPageLevel(
+      parent,
+      user,
+      limit,
+      args.cursor,
+      depth,
+      new Set(),
+    );
   }
 
   private async readChildPageLevel(
@@ -1679,7 +1979,11 @@ export class McpService {
     ancestors: Set<string>,
   ): Promise<any> {
     if (ancestors.has(parent.id)) {
-      return { code: 'DYNAMIC_RESOLUTION_FAILED', type: 'subpages', message: 'Page tree cycle detected' };
+      return {
+        code: 'DYNAMIC_RESOLUTION_FAILED',
+        type: 'subpages',
+        message: 'Page tree cycle detected',
+      };
     }
     const result = await this.pageService.getSidebarPages(
       parent.spaceId,
@@ -1692,10 +1996,19 @@ export class McpService {
     const nextAncestors = new Set(ancestors).add(parent.id);
     return {
       ...result,
-      items: await Promise.all(result.items.map(async (child: any) => ({
-        ...child,
-        children: await this.readChildPageLevel(child, user, limit, undefined, depth - 1, nextAncestors),
-      }))),
+      items: await Promise.all(
+        result.items.map(async (child: any) => ({
+          ...child,
+          children: await this.readChildPageLevel(
+            child,
+            user,
+            limit,
+            undefined,
+            depth - 1,
+            nextAncestors,
+          ),
+        })),
+      ),
     };
   }
 
@@ -1734,10 +2047,7 @@ export class McpService {
         const page = await this.getPageInWorkspace(args.pageId, workspace);
         await this.pageAccessService.validateCanView(page, user);
 
-        return this.commentService.findByPageId(
-          page.id,
-          this.pagination(args),
-        );
+        return this.commentService.findByPageId(page.id, this.pagination(args));
       }
 
       case 'get_comment': {
@@ -1816,8 +2126,12 @@ export class McpService {
             user,
             comment.spaceId,
           );
-          if (ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)) {
-            throw new ForbiddenException('You can only delete your own comments');
+          if (
+            ability.cannot(SpaceCaslAction.Manage, SpaceCaslSubject.Settings)
+          ) {
+            throw new ForbiddenException(
+              'You can only delete your own comments',
+            );
           }
         }
 
@@ -2156,7 +2470,9 @@ export class McpService {
         const page = await this.getPageInWorkspace(args.pageId, workspace);
         await this.pageAccessService.validateCanView(page, user);
 
-        return { breadcrumbs: await this.pageService.getPageBreadCrumbs(page.id) };
+        return {
+          breadcrumbs: await this.pageService.getPageBreadCrumbs(page.id),
+        };
       }
 
       case 'get_page_backlinks': {
@@ -2870,7 +3186,9 @@ export class McpService {
 
       case 'list_base_views': {
         const base = await this.assertCanViewBase(args.pageId, user, workspace);
-        return { views: await this.baseService.listViews(base.id, workspace.id) };
+        return {
+          views: await this.baseService.listViews(base.id, workspace.id),
+        };
       }
 
       case 'create_base_view': {
@@ -2939,7 +3257,13 @@ export class McpService {
       : await this.spaceMemberRepo.getUserSpaceIds(user.id);
 
     if (spaceIds.length === 0) {
-      return { query: args.query, pages: [], rows: [], comments: [], files: [] };
+      return {
+        query: args.query,
+        pages: [],
+        rows: [],
+        comments: [],
+        files: [],
+      };
     }
 
     // A failure in one category should not sink the whole sweep — the agent
@@ -2948,7 +3272,14 @@ export class McpService {
       this.sweepPages(args.query, args.spaceId, limit, user, workspace),
       this.sweepBaseRows(args.query, spaceIds, limit, user, workspace),
       this.sweepComments(args.query, spaceIds, limit, user, workspace),
-      this.sweepAttachments(args.query, args.spaceId, spaceIds, limit, user, workspace),
+      this.sweepAttachments(
+        args.query,
+        args.spaceId,
+        spaceIds,
+        limit,
+        user,
+        workspace,
+      ),
     ]);
 
     const failed = [
@@ -3196,11 +3527,13 @@ export class McpService {
   ): Promise<T[]> {
     if (pages.length === 0) return pages;
 
-    const accessibleIds = await this.pagePermissionRepo.filterAccessiblePageIds({
-      pageIds: pages.map((page) => page.id),
-      userId: user.id,
-      spaceId,
-    });
+    const accessibleIds = await this.pagePermissionRepo.filterAccessiblePageIds(
+      {
+        pageIds: pages.map((page) => page.id),
+        userId: user.id,
+        spaceId,
+      },
+    );
 
     const accessible = new Set(accessibleIds);
     return pages.filter((page) => accessible.has(page.id));

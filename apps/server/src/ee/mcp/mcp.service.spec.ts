@@ -6,7 +6,10 @@ import { richContentCapabilities } from '../../core/rich-content/rich-content-ca
 import { BlockEditService } from './rich-content/block-edit.service';
 
 const user = { id: 'user-1' } as any;
-const workspace = { id: 'workspace-1', settings: { ai: { mcpRichContent: true } } } as any;
+const workspace = {
+  id: 'workspace-1',
+  settings: { ai: { mcpRichContent: true } },
+} as any;
 
 const page = {
   id: 'page-1',
@@ -31,7 +34,9 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       removePage: jest.fn(),
     },
     pageRepo: { findById: jest.fn().mockResolvedValue(page) },
-    userRepo: { getUsersPaginated: jest.fn().mockResolvedValue({ items: [], meta: {} }) },
+    userRepo: {
+      getUsersPaginated: jest.fn().mockResolvedValue({ items: [], meta: {} }),
+    },
     pageAccessService: {
       validateCanView: jest.fn(),
       validateCanEdit: jest.fn(),
@@ -41,7 +46,11 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     spaceAbility: { createForUser: jest.fn() },
     baseService: { createBase: jest.fn() },
     searchService: { searchPage: jest.fn().mockResolvedValue({ items: [] }) },
-    commentService: { create: jest.fn(), update: jest.fn(), findByPageId: jest.fn() },
+    commentService: {
+      create: jest.fn(),
+      update: jest.fn(),
+      findByPageId: jest.fn(),
+    },
     commentRepo: { findById: jest.fn(), deleteComment: jest.fn() },
     labelService: {
       getPageLabels: jest.fn(),
@@ -54,7 +63,12 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     backlinkService: { findByPageId: jest.fn() },
     templateService: { getTemplate: jest.fn(), useTemplate: jest.fn() },
     searchAttachmentsService: { search: jest.fn() },
-    attachmentRepo: { findById: jest.fn(), findByPageIdPaginated: jest.fn().mockResolvedValue({ items: [], meta: {} }) },
+    attachmentRepo: {
+      findById: jest.fn(),
+      findByPageIdPaginated: jest
+        .fn()
+        .mockResolvedValue({ items: [], meta: {} }),
+    },
     attachmentService: { uploadFile: jest.fn() },
     embeddingService: {
       isConfigured: jest.fn().mockReturnValue(true),
@@ -74,7 +88,11 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
         content: page.content,
       }),
     },
-    blockEditService: { edit: jest.fn().mockResolvedValue({ pageId: 'page-1', revision: 'revision-2' }) },
+    blockEditService: {
+      edit: jest
+        .fn()
+        .mockResolvedValue({ pageId: 'page-1', revision: 'revision-2' }),
+    },
     ...overrides,
   };
 
@@ -118,7 +136,12 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
 
 function callTool(service: McpService, name: string, args: any) {
   return service.handleRpcRequest(
-    { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name, arguments: args } },
+    {
+      jsonrpc: '2.0',
+      id: 1,
+      method: 'tools/call',
+      params: { name, arguments: args },
+    },
     user,
     workspace,
   );
@@ -127,58 +150,116 @@ function callTool(service: McpService, name: string, args: any) {
 describe('McpService permissions', () => {
   it('hides and rejects rich content tools when the workspace rollout is disabled', async () => {
     const { service, deps } = buildService();
-    const disabledWorkspace = { ...workspace, settings: { ai: { mcpRichContent: false } } } as any;
+    const disabledWorkspace = {
+      ...workspace,
+      settings: { ai: { mcpRichContent: false } },
+    } as any;
 
     const listed: any = await service.handleRpcRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/list' }, user, disabledWorkspace,
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      user,
+      disabledWorkspace,
     );
     const names = listed.result.tools.map((tool: any) => tool.name);
     expect(names).toContain('get_content_capabilities');
-    expect(names).not.toEqual(expect.arrayContaining([
-      'edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments',
-    ]));
+    expect(names).not.toEqual(
+      expect.arrayContaining([
+        'edit_page_blocks',
+        'list_child_pages',
+        'search_users',
+        'list_page_attachments',
+      ]),
+    );
 
     const enabled: any = await service.handleRpcRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/list' }, user, workspace,
+      { jsonrpc: '2.0', id: 1, method: 'tools/list' },
+      user,
+      workspace,
     );
-    expect(enabled.result.tools.map((tool: any) => tool.name)).toEqual(expect.arrayContaining([
-      'edit_page_blocks', 'list_child_pages', 'search_users', 'list_page_attachments',
-    ]));
+    expect(enabled.result.tools.map((tool: any) => tool.name)).toEqual(
+      expect.arrayContaining([
+        'edit_page_blocks',
+        'list_child_pages',
+        'search_users',
+        'list_page_attachments',
+      ]),
+    );
 
     const capabilities: any = await service.handleRpcRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_content_capabilities', arguments: {} } },
-      user, disabledWorkspace,
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_content_capabilities', arguments: {} },
+      },
+      user,
+      disabledWorkspace,
     );
-    expect(JSON.parse(capabilities.result.content[0].text)).toEqual(expect.objectContaining({ enabled: false }));
+    expect(JSON.parse(capabilities.result.content[0].text)).toEqual(
+      expect.objectContaining({ enabled: false }),
+    );
 
     const edit: any = await service.handleRpcRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'edit_page_blocks', arguments: {} } },
-      user, disabledWorkspace,
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'edit_page_blocks', arguments: {} },
+      },
+      user,
+      disabledWorkspace,
     );
     expect(edit.result).toMatchObject({ isError: true });
     expect(deps.blockEditService.edit).not.toHaveBeenCalled();
 
     const pageResult: any = await service.handleRpcRequest(
-      { jsonrpc: '2.0', id: 1, method: 'tools/call', params: { name: 'get_page', arguments: { pageId: 'page-1' } } },
-      user, disabledWorkspace,
+      {
+        jsonrpc: '2.0',
+        id: 1,
+        method: 'tools/call',
+        params: { name: 'get_page', arguments: { pageId: 'page-1' } },
+      },
+      user,
+      disabledWorkspace,
     );
     const pagePayload = JSON.parse(pageResult.result.content[0].text);
     expect(pagePayload).not.toHaveProperty('revision');
     expect(pagePayload).not.toHaveProperty('blocks');
-    expect(deps.collaborationGateway.handleYjsEvent).not.toHaveBeenCalledWith('getPageSnapshot', expect.anything(), expect.anything());
+    expect(deps.collaborationGateway.handleYjsEvent).not.toHaveBeenCalledWith(
+      'getPageSnapshot',
+      expect.anything(),
+      expect.anything(),
+    );
   });
   it('dispatches edit_page_blocks with the authenticated API-key owner and preserves tool errors', async () => {
     const { service, deps } = buildService();
-    const args = { pageId: 'page-1', expectedRevision: 'revision-1', operations: [] };
+    const args = {
+      pageId: 'page-1',
+      expectedRevision: 'revision-1',
+      operations: [],
+    };
 
     const result: any = await callTool(service, 'edit_page_blocks', args);
-    expect(JSON.parse(result.result.content[0].text)).toEqual({ pageId: 'page-1', revision: 'revision-2' });
-    expect(deps.blockEditService.edit).toHaveBeenCalledWith(args, user, workspace);
+    expect(JSON.parse(result.result.content[0].text)).toEqual({
+      pageId: 'page-1',
+      revision: 'revision-2',
+    });
+    expect(deps.blockEditService.edit).toHaveBeenCalledWith(
+      args,
+      user,
+      workspace,
+    );
 
-    deps.blockEditService.edit.mockRejectedValueOnce(Object.assign(new Error('The page revision is stale'), { code: 'STALE_REVISION' }));
+    deps.blockEditService.edit.mockRejectedValueOnce(
+      Object.assign(new Error('The page revision is stale'), {
+        code: 'STALE_REVISION',
+      }),
+    );
     const error: any = await callTool(service, 'edit_page_blocks', args);
     expect(error.result).toMatchObject({ isError: true });
-    expect(error.result.content[0].text).toContain('STALE_REVISION: The page revision is stale');
+    expect(error.result.content[0].text).toContain(
+      'STALE_REVISION: The page revision is stale',
+    );
   });
   it('get_page rejects a page the user cannot view', async () => {
     const { service, deps } = buildService();
@@ -298,10 +379,12 @@ describe('McpService permissions', () => {
     const { service, deps } = buildService();
     deps.pageService.create.mockResolvedValue(page);
     deps.spaceAbility.createForUser.mockResolvedValue({ cannot: () => false });
-    const status = Buffer.from(JSON.stringify({
-      id: null,
-      attrs: { text: 'In progress', color: 'blue' },
-    })).toString('base64url');
+    const status = Buffer.from(
+      JSON.stringify({
+        id: null,
+        attrs: { text: 'In progress', color: 'blue' },
+      }),
+    ).toString('base64url');
 
     await callTool(service, 'create_page', {
       title: 'New',
@@ -309,16 +392,23 @@ describe('McpService permissions', () => {
       content: `:::docmost-subpages\nid: subpages-1\nattrs: {}\n:::\n\n{{docmost:status ${status}}}`,
     });
 
-    expect(deps.pageService.create).toHaveBeenCalledWith('user-1', 'workspace-1', expect.objectContaining({
-      format: 'json',
-      content: expect.objectContaining({
-        type: 'doc',
-        content: expect.arrayContaining([
-          expect.objectContaining({ type: 'subpages', attrs: expect.objectContaining({ id: 'subpages-1' }) }),
-          expect.objectContaining({ type: 'paragraph' }),
-        ]),
+    expect(deps.pageService.create).toHaveBeenCalledWith(
+      'user-1',
+      'workspace-1',
+      expect.objectContaining({
+        format: 'json',
+        content: expect.objectContaining({
+          type: 'doc',
+          content: expect.arrayContaining([
+            expect.objectContaining({
+              type: 'subpages',
+              attrs: expect.objectContaining({ id: 'subpages-1' }),
+            }),
+            expect.objectContaining({ type: 'paragraph' }),
+          ]),
+        }),
       }),
-    }));
+    );
   });
 
   it('updates ordinary Markdown through JSON while preserving the requested operation', async () => {
@@ -330,18 +420,22 @@ describe('McpService permissions', () => {
       operation: 'prepend',
     });
 
-    expect(deps.pageService.update).toHaveBeenCalledWith(page, expect.objectContaining({
-      pageId: 'page-1',
-      format: 'json',
-      operation: 'prepend',
-      content: expect.objectContaining({
-        type: 'doc',
-        content: expect.arrayContaining([
-          expect.objectContaining({ type: 'heading' }),
-          expect.objectContaining({ type: 'paragraph' }),
-        ]),
+    expect(deps.pageService.update).toHaveBeenCalledWith(
+      page,
+      expect.objectContaining({
+        pageId: 'page-1',
+        format: 'json',
+        operation: 'prepend',
+        content: expect.objectContaining({
+          type: 'doc',
+          content: expect.arrayContaining([
+            expect.objectContaining({ type: 'heading' }),
+            expect.objectContaining({ type: 'paragraph' }),
+          ]),
+        }),
       }),
-    }), user);
+      user,
+    );
   });
 
   it('create_base checks the space resolved from the parent page', async () => {
@@ -627,7 +721,10 @@ describe('McpService permissions', () => {
   it('upload_attachment strips a data: prefix and needs an extension', async () => {
     const { service, deps } = buildService();
     deps.attachmentService.uploadFile.mockResolvedValue({
-      id: 'att-1', fileName: 'a.png', fileSize: 5, mimeType: 'image/png',
+      id: 'att-1',
+      fileName: 'a.png',
+      fileSize: 5,
+      mimeType: 'image/png',
     });
 
     const bad: any = await callTool(service, 'upload_attachment', {
@@ -723,7 +820,11 @@ describe('McpService permissions', () => {
   it('returns a serializable rich-content capability contract', async () => {
     const { service } = buildService();
 
-    const response: any = await callTool(service, 'get_content_capabilities', {});
+    const response: any = await callTool(
+      service,
+      'get_content_capabilities',
+      {},
+    );
     const body = JSON.parse(response.result.content[0].text);
 
     expect(response.result.isError).toBeUndefined();
@@ -800,7 +901,10 @@ describe('McpService permissions', () => {
       { userId: 'user-1', workspaceId: 'workspace-1' },
     );
     expect(JSON.parse(res.result.content[0].text).results[0]).toEqual(
-      expect.objectContaining({ spaceId: 'space-1', highlight: 'a <b>match</b>' }),
+      expect.objectContaining({
+        spaceId: 'space-1',
+        highlight: 'a <b>match</b>',
+      }),
     );
   });
 
@@ -859,7 +963,13 @@ describe('McpService permissions', () => {
     const { service, deps } = buildService();
     deps.pageService.getSidebarPages = jest.fn().mockResolvedValue({
       items: [{ id: 'child-1', title: 'First', position: 'a0' }],
-      meta: { limit: 10, hasNextPage: true, hasPrevPage: false, nextCursor: 'next', prevCursor: null },
+      meta: {
+        limit: 10,
+        hasNextPage: true,
+        hasPrevPage: false,
+        nextCursor: 'next',
+        prevCursor: null,
+      },
     });
 
     const response: any = await callTool(service, 'list_child_pages', {
@@ -869,7 +979,10 @@ describe('McpService permissions', () => {
       depth: 1,
     });
 
-    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
+    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(
+      page,
+      user,
+    );
     expect(deps.pageService.getSidebarPages).toHaveBeenCalledWith(
       'space-1',
       expect.objectContaining({ limit: 10, cursor: 'cursor-1' }),
@@ -878,7 +991,9 @@ describe('McpService permissions', () => {
       true,
     );
     expect(JSON.parse(response.result.content[0].text)).toEqual(
-      expect.objectContaining({ items: [{ id: 'child-1', title: 'First', position: 'a0' }] }),
+      expect.objectContaining({
+        items: [{ id: 'child-1', title: 'First', position: 'a0' }],
+      }),
     );
   });
 
@@ -890,7 +1005,9 @@ describe('McpService permissions', () => {
     });
 
     const response: any = await callTool(service, 'search_users', {
-      query: 'ada', limit: 10, cursor: 'cursor-1',
+      query: 'ada',
+      limit: 10,
+      cursor: 'cursor-1',
     });
 
     expect(deps.userRepo.getUsersPaginated).toHaveBeenCalledWith(
@@ -910,10 +1027,15 @@ describe('McpService permissions', () => {
     });
 
     const response: any = await callTool(service, 'list_page_attachments', {
-      pageId: 'page-1', limit: 10, cursor: 'cursor-1',
+      pageId: 'page-1',
+      limit: 10,
+      cursor: 'cursor-1',
     });
 
-    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
+    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(
+      page,
+      user,
+    );
     expect(deps.attachmentRepo.findByPageIdPaginated).toHaveBeenCalledWith(
       'page-1',
       'workspace-1',
@@ -943,26 +1065,35 @@ describe('McpService permissions', () => {
       },
     });
 
-    const response: any = await callTool(service, 'get_page', { pageId: 'page-1' });
+    const response: any = await callTool(service, 'get_page', {
+      pageId: 'page-1',
+    });
     const body = JSON.parse(response.result.content[0].text);
 
-    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(page, user);
+    expect(deps.pageAccessService.validateCanView).toHaveBeenCalledWith(
+      page,
+      user,
+    );
     expect(deps.collaborationGateway.handleYjsEvent).toHaveBeenCalledWith(
       'getPageSnapshot',
       'page.page-1',
       { user },
     );
-    expect(body).toEqual(expect.objectContaining({ revision: 'revision-current' }));
+    expect(body).toEqual(
+      expect.objectContaining({ revision: 'revision-current' }),
+    );
     expect(body.content).toContain('Current');
-    expect(body.blocks).toEqual(expect.arrayContaining([
-      expect.objectContaining({
-        id: 'legacy:revision-current:0',
-        type: 'paragraph',
-        path: [0],
-      }),
-      expect.objectContaining({ type: 'status', path: [0, 1] }),
-      expect.objectContaining({ type: 'subpages', path: [1] }),
-    ]));
+    expect(body.blocks).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'legacy:revision-current:0',
+          type: 'paragraph',
+          path: [0],
+        }),
+        expect.objectContaining({ type: 'status', path: [0, 1] }),
+        expect.objectContaining({ type: 'subpages', path: [1] }),
+      ]),
+    );
     expect(deps.pageService.update).not.toHaveBeenCalled();
     expect(deps.wsService.emitCommentEvent).not.toHaveBeenCalled();
   });

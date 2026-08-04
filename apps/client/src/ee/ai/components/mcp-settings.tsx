@@ -49,14 +49,21 @@ export default function McpSettings() {
     }
   };
 
-  const handleRichContentChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleRichContentChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const value = event.currentTarget.checked;
     try {
-      const updatedWorkspace = await updateWorkspace({ mcpRichContentEnabled: value });
+      const updatedWorkspace = await updateWorkspace({
+        mcpRichContentEnabled: value,
+      });
       setRichContentEnabled(value);
       setWorkspace(updatedWorkspace);
     } catch (err) {
-      notifications.show({ message: err?.response?.data?.message, color: "red" });
+      notifications.show({
+        message: err?.response?.data?.message,
+        color: "red",
+      });
     }
   };
 
@@ -80,7 +87,13 @@ export default function McpSettings() {
             <Trans
               i18nKey="View the <anchor>MCP documentation</anchor>."
               components={{
-                anchor: <Anchor href="https://docmost.com/docs/user-guide/mcp" target="_blank" size="sm" />,
+                anchor: (
+                  <Anchor
+                    href="https://docmost.com/docs/user-guide/mcp"
+                    target="_blank"
+                    size="sm"
+                  />
+                ),
               }}
             />
           </Text>
@@ -99,12 +112,19 @@ export default function McpSettings() {
         <div>
           <Group justify="space-between" wrap="nowrap" gap="xl" mb="md">
             <div>
-              <Text size="sm" fw={500}>{t("Rich content tools")}</Text>
+              <Text size="sm" fw={500}>
+                {t("Rich content tools")}
+              </Text>
               <Text size="sm" c="dimmed">
-                {t("Enable structured page blocks, live revisions, child-page browsing, user search, and attachment listing for MCP clients.")}
+                {t(
+                  "Enable structured page blocks, live revisions, child-page browsing, user search, and attachment listing for MCP clients.",
+                )}
               </Text>
             </div>
-            <Switch checked={richContentEnabled} onChange={handleRichContentChange} />
+            <Switch
+              checked={richContentEnabled}
+              onChange={handleRichContentChange}
+            />
           </Group>
           <Text size="sm" fw={500} mb={4}>
             {t("MCP Server URL")}
@@ -140,8 +160,20 @@ export default function McpSettings() {
               {t("Supported tools")}
             </Text>
             <List size="sm" spacing={2}>
-              <List.Item><Text size="sm" c="dimmed" span>{t("Pages, spaces, comments, labels, favorites, templates, attachments, exports, bases, and search")}</Text></List.Item>
-              <List.Item><Text size="sm" c="dimmed" span>{t("Rich content: get_content_capabilities, structured get_page, edit_page_blocks, list_child_pages, search_users, list_page_attachments")}</Text></List.Item>
+              <List.Item>
+                <Text size="sm" c="dimmed" span>
+                  {t(
+                    "Pages, spaces, comments, labels, favorites, templates, attachments, exports, bases, and search",
+                  )}
+                </Text>
+              </List.Item>
+              <List.Item>
+                <Text size="sm" c="dimmed" span>
+                  {t(
+                    "Rich content: get_content_capabilities, structured get_page, edit_page_blocks, list_child_pages, search_users, list_page_attachments",
+                  )}
+                </Text>
+              </List.Item>
             </List>
           </div>
         </div>

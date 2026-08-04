@@ -8,7 +8,15 @@ import { BlockEditService } from './block-edit.service';
 
 @Module({
   imports: [PageModule, TransclusionModule, BaseModule],
-  providers: [RichContentCapabilitiesService, ContentReaderService, BlockEditService],
-  exports: [RichContentCapabilitiesService, ContentReaderService, BlockEditService],
+  providers: [
+    RichContentCapabilitiesService,
+    ContentReaderService,
+    BlockEditService,
+  ],
+  exports: [
+    RichContentCapabilitiesService,
+    ContentReaderService,
+    BlockEditService,
+  ],
 })
 export class RichContentModule {}

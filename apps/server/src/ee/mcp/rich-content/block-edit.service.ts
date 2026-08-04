@@ -54,7 +54,10 @@ export class BlockEditService {
     return { pageId: page.id, revision: snapshot!.revision };
   }
 
-  private async getPageInWorkspace(pageId: string, workspace: Workspace): Promise<Page> {
+  private async getPageInWorkspace(
+    pageId: string,
+    workspace: Workspace,
+  ): Promise<Page> {
     const page = await this.pageRepo.findById(pageId);
     if (!page || page.deletedAt || page.workspaceId !== workspace.id) {
       throw new NotFoundException('Page not found');
@@ -76,15 +79,26 @@ export class BlockEditService {
     if (typeof input.expectedRevision !== 'string' || !input.expectedRevision) {
       this.invalid('expectedRevision is required');
     }
-    if (!Array.isArray(input.operations)) this.invalid('operations must be an array');
+    if (!Array.isArray(input.operations))
+      this.invalid('operations must be an array');
     if (input.operations.length > MAX_OPERATIONS) {
-      throw new BlockEditRequestError('TOO_MANY_OPERATIONS', `A maximum of ${MAX_OPERATIONS} operations is allowed`);
+      throw new BlockEditRequestError(
+        'TOO_MANY_OPERATIONS',
+        `A maximum of ${MAX_OPERATIONS} operations is allowed`,
+      );
     }
-    if (!input.operations.every(this.isRecord)) this.invalid('Each operation must be an object');
-    return input as { pageId: string; expectedRevision?: string; operations: RawOperation[] };
+    if (!input.operations.every(this.isRecord))
+      this.invalid('Each operation must be an object');
+    return input as {
+      pageId: string;
+      expectedRevision?: string;
+      operations: RawOperation[];
+    };
   }
 
-  private async normalizeOperation(operation: RawOperation): Promise<Record<string, unknown>> {
+  private async normalizeOperation(
+    operation: RawOperation,
+  ): Promise<Record<string, unknown>> {
     this.rejectResolved(operation);
     const type = operation.type;
     if (typeof type !== 'string') this.invalid('Operation type is required');
@@ -101,29 +115,46 @@ export class BlockEditService {
     const allowed = fields[type];
     if (!allowed) this.invalid(`Unsupported operation '${type}'`);
     this.rejectUnknown(operation, allowed);
-    if (typeof operation.target !== 'string' || !operation.target) this.invalid('Operation target is required');
+    if (typeof operation.target !== 'string' || !operation.target)
+      this.invalid('Operation target is required');
 
     if (type === 'move') {
-      if (typeof operation.destination !== 'string' || !operation.destination) this.invalid('Move destination is required');
-      if (operation.position !== undefined && !['before', 'after', 'in'].includes(operation.position as string)) this.invalid('Invalid move position');
+      if (typeof operation.destination !== 'string' || !operation.destination)
+        this.invalid('Move destination is required');
+      if (
+        operation.position !== undefined &&
+        !['before', 'after', 'in'].includes(operation.position as string)
+      )
+        this.invalid('Invalid move position');
       return operation;
     }
     if (type === 'update') {
-      if (!this.isRecord(operation.attrs)) this.invalid('update attrs must be an object');
+      if (!this.isRecord(operation.attrs))
+        this.invalid('update attrs must be an object');
       return operation;
     }
     if (type === 'delete') return operation;
 
-    if (typeof operation.content !== 'string') this.invalid('Operation content must be Agent Markdown');
+    if (typeof operation.content !== 'string')
+      this.invalid('Operation content must be Agent Markdown');
     if (operation.content.length > MAX_AGENT_MARKDOWN_LENGTH) {
-      this.invalid(`Operation content cannot exceed ${MAX_AGENT_MARKDOWN_LENGTH} characters`);
+      this.invalid(
+        `Operation content cannot exceed ${MAX_AGENT_MARKDOWN_LENGTH} characters`,
+      );
     }
-    const content = await agentMarkdownToProsemirror(operation.content, tiptapExtensions);
+    const content = await agentMarkdownToProsemirror(
+      operation.content,
+      tiptapExtensions,
+    );
     if (type === 'replaceRange') {
-      if (!Number.isInteger(operation.from) || !Number.isInteger(operation.to)) this.invalid('replaceRange requires integer from and to');
+      if (!Number.isInteger(operation.from) || !Number.isInteger(operation.to))
+        this.invalid('replaceRange requires integer from and to');
       return { ...operation, content: content.content ?? [] };
     }
-    if (content.content?.length !== 1) this.invalid('Insert operations require exactly one block of Agent Markdown');
+    if (content.content?.length !== 1)
+      this.invalid(
+        'Insert operations require exactly one block of Agent Markdown',
+      );
     return { ...operation, content: content.content[0] as JSONContent };
   }
 
@@ -140,7 +171,8 @@ export class BlockEditService {
       }
       if (!this.isRecord(value)) return;
       if (typeof value.pageId === 'string') pageIds.add(value.pageId);
-      if (typeof value.sourcePageId === 'string') pageIds.add(value.sourcePageId);
+      if (typeof value.sourcePageId === 'string')
+        pageIds.add(value.sourcePageId);
       if (value.entityType === 'page' && typeof value.entityId === 'string') {
         pageIds.add(value.entityId);
       }
@@ -157,7 +189,10 @@ export class BlockEditService {
     }
   }
 
-  private rejectUnknown(value: Record<string, unknown>, allowed: readonly string[]) {
+  private rejectUnknown(
+    value: Record<string, unknown>,
+    allowed: readonly string[],
+  ) {
     const unknown = Object.keys(value).find((key) => !allowed.includes(key));
     if (unknown) this.invalid(`Unknown field '${unknown}'`);
   }

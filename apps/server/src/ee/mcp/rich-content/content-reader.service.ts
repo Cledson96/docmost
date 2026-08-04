@@ -84,10 +84,15 @@ export class ContentReaderService {
   }
 
   private isDynamicBlock(type: string): boolean {
-    return type === 'subpages' || type === 'base' || type === 'transclusionReference';
+    return (
+      type === 'subpages' || type === 'base' || type === 'transclusionReference'
+    );
   }
 
-  private async resolveBlock(block: McpPageBlock, context: DynamicReadContext): Promise<unknown> {
+  private async resolveBlock(
+    block: McpPageBlock,
+    context: DynamicReadContext,
+  ): Promise<unknown> {
     try {
       switch (block.type) {
         case 'subpages':
@@ -102,10 +107,14 @@ export class ContentReaderService {
     }
   }
 
-  private async resolveSubpages(block: McpPageBlock, context: DynamicReadContext) {
+  private async resolveSubpages(
+    block: McpPageBlock,
+    context: DynamicReadContext,
+  ) {
     const limit = this.dynamicLimit(block.attrs.limit);
     const depth = this.dynamicDepth(block.attrs.depth);
-    if (!this.pageService) return this.dynamicFailure('subpages', 'Dynamic resolver unavailable');
+    if (!this.pageService)
+      return this.dynamicFailure('subpages', 'Dynamic resolver unavailable');
     return this.readChildren(context.page.id, context, limit, depth, new Set());
   }
 
@@ -120,7 +129,10 @@ export class ContentReaderService {
       return this.dynamicFailure('subpages', 'Page tree cycle detected');
     }
     if (depth < 1) {
-      return this.dynamicFailure('subpages', `Maximum dynamic depth of ${MAX_DYNAMIC_DEPTH} reached`);
+      return this.dynamicFailure(
+        'subpages',
+        `Maximum dynamic depth of ${MAX_DYNAMIC_DEPTH} reached`,
+      );
     }
     const result = await this.pageService!.getSidebarPages(
       context.page.spaceId,
@@ -137,30 +149,56 @@ export class ContentReaderService {
       items: await Promise.all(
         result.items.map(async (item: any) => ({
           ...item,
-          children: await this.readChildren(item.id, context, limit, depth - 1, nextAncestors),
+          children: await this.readChildren(
+            item.id,
+            context,
+            limit,
+            depth - 1,
+            nextAncestors,
+          ),
         })),
       ),
     };
   }
 
-  private async resolveBase(block: McpPageBlock, context: DynamicReadContext): Promise<unknown> {
+  private async resolveBase(
+    block: McpPageBlock,
+    context: DynamicReadContext,
+  ): Promise<unknown> {
     const pageId = this.requiredString(block.attrs.pageId, 'base pageId');
     if (!this.pageRepo || !this.pageAccessService || !this.baseService) {
       return this.dynamicFailure('base', 'Dynamic resolver unavailable');
     }
     const base = await this.pageRepo.findById(pageId);
-    if (!base || base.workspaceId !== context.workspaceId || base.deletedAt || !base.isBase) {
+    if (
+      !base ||
+      base.workspaceId !== context.workspaceId ||
+      base.deletedAt ||
+      !base.isBase
+    ) {
       return this.dynamicFailure('base', 'Base not found');
     }
     await this.pageAccessService.validateCanView(base, context.user);
     return this.baseService.getBaseInfo(pageId, context.workspaceId);
   }
 
-  private async resolveTransclusion(block: McpPageBlock, context: DynamicReadContext): Promise<unknown> {
-    const sourcePageId = this.requiredString(block.attrs.sourcePageId, 'sourcePageId');
-    const transclusionId = this.requiredString(block.attrs.transclusionId, 'transclusionId');
+  private async resolveTransclusion(
+    block: McpPageBlock,
+    context: DynamicReadContext,
+  ): Promise<unknown> {
+    const sourcePageId = this.requiredString(
+      block.attrs.sourcePageId,
+      'sourcePageId',
+    );
+    const transclusionId = this.requiredString(
+      block.attrs.transclusionId,
+      'transclusionId',
+    );
     if (!this.transclusionService) {
-      return this.dynamicFailure('transclusionReference', 'Dynamic resolver unavailable');
+      return this.dynamicFailure(
+        'transclusionReference',
+        'Dynamic resolver unavailable',
+      );
     }
     const { items } = await this.transclusionService.lookup(
       [{ sourcePageId, transclusionId }],
@@ -168,8 +206,13 @@ export class ContentReaderService {
       context.workspaceId,
     );
     const item = items[0];
-    if (!item) return this.dynamicFailure('transclusionReference', 'Transclusion not found');
-    if ('status' in item) return this.dynamicFailure('transclusionReference', item.status);
+    if (!item)
+      return this.dynamicFailure(
+        'transclusionReference',
+        'Transclusion not found',
+      );
+    if ('status' in item)
+      return this.dynamicFailure('transclusionReference', item.status);
     return item;
   }
 
@@ -186,7 +229,8 @@ export class ContentReaderService {
   }
 
   private requiredString(value: unknown, name: string): string {
-    if (typeof value !== 'string' || !value) throw new Error(`${name} is required`);
+    if (typeof value !== 'string' || !value)
+      throw new Error(`${name} is required`);
     return value;
   }
 

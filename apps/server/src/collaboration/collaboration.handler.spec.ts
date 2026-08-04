@@ -47,15 +47,25 @@ describe('CollaborationHandler', () => {
       .getHandlers(hocuspocus as any)
       .editPageBlocks('page.page-1', {
         user,
-        operations: [{
-          type: 'insertAfter',
-          target: 'existing',
-          content: { type: 'paragraph', attrs: { id: 'persisted' } },
-        }],
+        operations: [
+          {
+            type: 'insertAfter',
+            target: 'existing',
+            content: { type: 'paragraph', attrs: { id: 'persisted' } },
+          },
+        ],
       });
 
-    expect(hocuspocus.openDirectConnection).toHaveBeenCalledWith('page.page-1', { user });
-    expect(doc.getXmlFragment('default').toArray().map((node: any) => node.getAttribute('id'))).toEqual(['existing', 'persisted']);
+    expect(hocuspocus.openDirectConnection).toHaveBeenCalledWith(
+      'page.page-1',
+      { user },
+    );
+    expect(
+      doc
+        .getXmlFragment('default')
+        .toArray()
+        .map((node: any) => node.getAttribute('id')),
+    ).toEqual(['existing', 'persisted']);
     expect(result.revision).toMatch(/^[A-Za-z0-9_-]{43}$/);
     expect(disconnect).toHaveBeenCalledTimes(1);
   });
