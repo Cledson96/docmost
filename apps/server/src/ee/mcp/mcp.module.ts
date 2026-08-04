@@ -13,6 +13,7 @@ import { SearchAttachmentsModule } from '../search-attachments/search-attachment
 import { ExportModule } from '../../integrations/export/export.module';
 import { AttachmentModule } from '../../core/attachment/attachment.module';
 import { EmbeddingModule } from '../embedding/embedding.module';
+import { RichContentModule } from './rich-content/rich-content.module';
 
 @Module({
   imports: [
@@ -28,6 +29,7 @@ import { EmbeddingModule } from '../embedding/embedding.module';
     ExportModule,
     AttachmentModule,
     EmbeddingModule,
+    RichContentModule,
   ],
   controllers: [McpController],
   providers: [McpService],

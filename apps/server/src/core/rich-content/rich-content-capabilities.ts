@@ -5,6 +5,7 @@ import {
 } from '@docmost/editor-ext';
 
 export type RichContentCapabilityCategory = 'node' | 'mark';
+export type RichContentCapabilityOperation = 'create';
 export type RichContentAttributeType =
   | 'string'
   | 'number'
@@ -34,6 +35,7 @@ export interface RichContentAttribute {
 export interface RichContentCapability {
   name: string;
   category: RichContentCapabilityCategory;
+  operations: readonly RichContentCapabilityOperation[];
   agentMarkdownSyntax: AgentMarkdownSyntax;
   blockAddressable: boolean;
   description: string;
@@ -47,7 +49,12 @@ type RichContentAttributeInput = Omit<RichContentAttribute, 'type'> & {
 
 type RichContentCapabilityInput = Omit<
   RichContentCapability,
-  'name' | 'category' | 'agentMarkdownSyntax' | 'description' | 'attributes'
+  | 'name'
+  | 'category'
+  | 'operations'
+  | 'agentMarkdownSyntax'
+  | 'description'
+  | 'attributes'
 > & {
   attributes: readonly RichContentAttributeInput[];
 };
@@ -98,6 +105,7 @@ const node = (
 ): RichContentCapability => ({
   name,
   category: 'node',
+  operations: ['create'],
   agentMarkdownSyntax: agentMarkdownSyntaxFor(name),
   description,
   ...options,
@@ -112,6 +120,7 @@ const mark = (
 ): RichContentCapability => ({
   name,
   category: 'mark',
+  operations: ['create'],
   agentMarkdownSyntax: agentMarkdownSyntaxFor(name),
   blockAddressable: false,
   description,

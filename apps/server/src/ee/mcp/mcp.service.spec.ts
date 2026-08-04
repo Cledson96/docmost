@@ -1,5 +1,7 @@
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 import { McpService } from './mcp.service';
+import { RichContentCapabilitiesService } from './rich-content/rich-content-capabilities.service';
+import { richContentCapabilities } from '../../core/rich-content/rich-content-capabilities';
 
 const user = { id: 'user-1' } as any;
 const workspace = { id: 'workspace-1' } as any;
@@ -61,6 +63,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
     exportService: { exportPages: jest.fn() },
     wsService: { emitCommentEvent: jest.fn() },
     auditService: { log: jest.fn() },
+    richContentCapabilitiesService: new RichContentCapabilitiesService(),
     ...overrides,
   };
 
@@ -91,6 +94,7 @@ function buildService(overrides: Partial<Record<string, any>> = {}) {
       'exportService',
       'wsService',
       'auditService',
+      'richContentCapabilitiesService',
     ].map((key) => deps[key]) as ConstructorParameters<typeof McpService>),
   );
 
@@ -590,9 +594,67 @@ describe('McpService permissions', () => {
         'create_base_row',
         'create_comment',
         'use_template',
+        'get_content_capabilities',
       ]),
     );
     expect(new Set(names).size).toBe(names.length);
+  });
+
+  it('returns a serializable rich-content capability contract', async () => {
+    const { service } = buildService();
+
+    const response: any = await callTool(service, 'get_content_capabilities', {});
+    const body = JSON.parse(response.result.content[0].text);
+
+    expect(response.result.isError).toBeUndefined();
+    expect(body).toEqual(
+      expect.objectContaining({
+        capabilities: expect.arrayContaining([
+          expect.objectContaining({
+            name: 'heading',
+            category: 'node',
+            operations: ['create'],
+            agentMarkdownSyntax: expect.any(String),
+            attributes: expect.arrayContaining([
+              expect.objectContaining({
+                name: 'level',
+                type: 'integer',
+              }),
+            ]),
+          }),
+          expect.objectContaining({
+            name: 'embed',
+            attributes: expect.arrayContaining([
+              expect.objectContaining({
+                name: 'provider',
+                enum: expect.arrayContaining(['loom', 'youtube', 'iframe']),
+              }),
+            ]),
+          }),
+        ]),
+      }),
+    );
+    expect(JSON.parse(JSON.stringify(body))).toEqual(body);
+  });
+
+  it('returns a fresh capability snapshot without mutating the shared contract', async () => {
+    const { service } = buildService();
+
+    const first: any = await callTool(service, 'get_content_capabilities', {});
+    const firstBody = JSON.parse(first.result.content[0].text);
+    firstBody.capabilities[0].attributes.push({ name: 'injected' });
+
+    const second: any = await callTool(service, 'get_content_capabilities', {});
+    const secondBody = JSON.parse(second.result.content[0].text);
+
+    expect(secondBody.capabilities[0].attributes).not.toEqual(
+      expect.arrayContaining([expect.objectContaining({ name: 'injected' })]),
+    );
+    expect(
+      richContentCapabilities
+        .find((capability) => capability.name === 'embed')
+        ?.attributes.find((attribute) => attribute.name === 'provider')?.enum,
+    ).toBeUndefined();
   });
 
   it('search_workspace delegates to the full-text search scoped to the user', async () => {

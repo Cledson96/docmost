@@ -13,6 +13,7 @@
 - As versões negociadas são `2024-11-05`, `2025-03-26` e `2025-06-18`. O servidor devolve a versão conhecida solicitada; para uma versão desconhecida, devolve `2025-06-18`.
 - `tools/call` retorna conteúdo textual JSON para resultados. Erros de ferramenta retornam `result.isError: true`; método desconhecido usa erro JSON-RPC `-32601`.
 - `getToolsList()` em `mcp.service.ts` é a fonte de verdade. A lista exibida em `apps/client/src/ee/ai/components/mcp-settings.tsx` é apenas um resumo e pode não conter todas as ferramentas.
+- `get_content_capabilities` é uma ferramenta MCP estável e sem argumentos para descobrir os blocos e marks ricos suportados. Ela retorna `{ capabilities }` a partir de `core/rich-content/rich-content-capabilities.ts`, em um snapshot serializável; `RichContentCapabilitiesService` apenas acrescenta ao atributo `embed.provider` os IDs atuais de `embedProviders` em `packages/editor-ext`.
 - `apps/server/src/core/rich-content/rich-content-capabilities.ts` mantém o contrato compartilhado para futura descoberta de conteúdo rico pelo MCP: ele lista as capacidades públicas do schema TipTap, exclui o mark interno `comment` e expõe a sintaxe Agent Markdown de cada tipo. A classificação `standard`, `block-directive` e `inline-directive` é definida em `packages/editor-ext/src/lib/markdown/agent-markdown-syntax.ts`, também usada pelo codec reversível do editor.
 
 ## Recursos Expostos
@@ -21,7 +22,7 @@
 - Conteúdo do workspace: comentários, labels, favoritos, histórico, templates, anexos e exportação de uma página.
 - Bases: criar, converter páginas, consultar e alterar schema, propriedades, linhas e views; bases são páginas e seguem a autorização da página.
 - Busca avançada: busca semântica, reindexação de embeddings e busca ampla em páginas, bases, comentários e anexos.
-- A lista e os schemas de cada ferramenta ficam em `getPageToolsList`, `getBaseToolsList` e `getWorkspaceToolsList`; a execução fica em `callTool`, `callWorkspaceTool` e `callBaseTool`.
+- A lista e os schemas de cada ferramenta ficam em `getToolsList`, `getPageToolsList`, `getBaseToolsList` e `getWorkspaceToolsList`; a execução fica em `callTool`, `callWorkspaceTool` e `callBaseTool`.
 
 ## Autorização E Limites
 

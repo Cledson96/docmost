@@ -59,6 +59,7 @@ import {
   IAuditService,
 } from '../../integrations/audit/audit.service';
 import { getPageTitle } from '../../common/helpers';
+import { RichContentCapabilitiesService } from './rich-content/rich-content-capabilities.service';
 
 /**
  * Every revision we've tested against. Our initialize/tools/list/tools/call
@@ -123,6 +124,7 @@ export class McpService {
     private readonly exportService: ExportService,
     private readonly wsService: WsService,
     @Inject(AUDIT_SERVICE) private readonly auditService: IAuditService,
+    private readonly richContentCapabilitiesService: RichContentCapabilitiesService,
   ) {}
 
   async handleRpcRequest(body: any, user: User, workspace: Workspace) {
@@ -238,6 +240,15 @@ export class McpService {
 
   private getToolsList() {
     return [
+      {
+        name: 'get_content_capabilities',
+        description:
+          'Get the rich-content blocks and marks supported by the editor, including attributes and Agent Markdown syntax.',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
       ...this.getPageToolsList(),
       ...this.getBaseToolsList(),
       ...this.getWorkspaceToolsList(),
@@ -1285,6 +1296,11 @@ export class McpService {
     workspace: Workspace,
   ) {
     switch (name) {
+      case 'get_content_capabilities':
+        return {
+          capabilities: this.richContentCapabilitiesService.getCapabilities(),
+        };
+
       case 'list_spaces': {
         const spaceIds = await this.spaceMemberRepo.getUserSpaceIds(user.id);
         if (spaceIds.length === 0) {
