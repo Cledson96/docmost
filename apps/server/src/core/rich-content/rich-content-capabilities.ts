@@ -56,6 +56,11 @@ export const richContentCapabilities = [
       { name: 'mime', description: 'Attachment MIME type.' },
       { name: 'size', description: 'Attachment size in bytes.' },
       { name: 'attachmentId', description: 'Stored attachment identifier.' },
+      {
+        name: 'placeholder',
+        description: 'Upload placeholder state.',
+        transient: true,
+      },
     ],
   }),
   node('audio', 'Embedded audio player.', {
@@ -64,6 +69,11 @@ export const richContentCapabilities = [
       { name: 'src', description: 'Audio URL.', required: true },
       { name: 'attachmentId', description: 'Stored attachment identifier.' },
       { name: 'size', description: 'Audio size in bytes.' },
+      {
+        name: 'placeholder',
+        description: 'Upload placeholder state.',
+        transient: true,
+      },
     ],
   }),
   node('base', 'Embedded Docmost base.', {
@@ -88,7 +98,10 @@ export const richContentCapabilities = [
   }),
   node('callout', 'Callout block with a visual variant.', {
     blockAddressable: false,
-    attributes: [{ name: 'type', description: 'Callout variant.' }],
+    attributes: [
+      { name: 'type', description: 'Callout variant.' },
+      { name: 'icon', description: 'Optional callout icon.' },
+    ],
   }),
   mark('code', 'Inline code text.'),
   node('codeBlock', 'Fenced code block.', {
@@ -99,7 +112,10 @@ export const richContentCapabilities = [
   }),
   node('columns', 'Multi-column layout container.', {
     blockAddressable: false,
-    attributes: [],
+    attributes: [
+      { name: 'layout', description: 'Column layout preset.' },
+      { name: 'widthMode', description: 'Column width mode.' },
+    ],
   }),
   node('details', 'Collapsible details block.', {
     blockAddressable: false,
@@ -109,15 +125,41 @@ export const richContentCapabilities = [
   }),
   node('drawio', 'Draw.io diagram embed.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'Diagram URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'Diagram URL.', required: true },
+      { name: 'title', description: 'Diagram title.' },
+      { name: 'alt', description: 'Diagram alternative text.' },
+      { name: 'width', description: 'Diagram width.' },
+      { name: 'height', description: 'Diagram height.' },
+      { name: 'size', description: 'Diagram size in bytes.' },
+      { name: 'aspectRatio', description: 'Diagram aspect ratio.' },
+      { name: 'align', description: 'Diagram alignment.' },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
+    ],
   }),
   node('embed', 'External embed block.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'Embed URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'Embed URL.', required: true },
+      { name: 'provider', description: 'Embed provider identifier.' },
+      { name: 'align', description: 'Embed alignment.' },
+      { name: 'width', description: 'Embed width.' },
+      { name: 'height', description: 'Embed height.' },
+    ],
   }),
   node('excalidraw', 'Excalidraw diagram embed.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'Diagram URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'Diagram URL.', required: true },
+      { name: 'title', description: 'Diagram title.' },
+      { name: 'alt', description: 'Diagram alternative text.' },
+      { name: 'width', description: 'Diagram width.' },
+      { name: 'height', description: 'Diagram height.' },
+      { name: 'size', description: 'Diagram size in bytes.' },
+      { name: 'aspectRatio', description: 'Diagram aspect ratio.' },
+      { name: 'align', description: 'Diagram alignment.' },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
+    ],
   }),
   node('hardBreak', 'Hard line break.', {
     blockAddressable: false,
@@ -136,10 +178,13 @@ export const richContentCapabilities = [
         description: 'Heading level.',
         validation: 'integer from 1 to 6',
       },
+      { name: 'textAlign', description: 'Heading text alignment.' },
+      { name: 'indent', description: 'Heading indentation level.' },
     ],
   }),
   mark('highlight', 'Highlighted inline text.', [
     { name: 'color', description: 'Highlight color.' },
+    { name: 'colorName', description: 'Named highlight color.' },
   ]),
   node('horizontalRule', 'Horizontal divider.', {
     blockAddressable: false,
@@ -147,12 +192,30 @@ export const richContentCapabilities = [
   }),
   node('image', 'Embedded image.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'Image URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'Image URL.', required: true },
+      { name: 'width', description: 'Image width.' },
+      { name: 'height', description: 'Image height.' },
+      { name: 'align', description: 'Image alignment.' },
+      { name: 'alt', description: 'Image alternative text.' },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
+      { name: 'size', description: 'Image size in bytes.' },
+      { name: 'aspectRatio', description: 'Image aspect ratio.' },
+      {
+        name: 'placeholder',
+        description: 'Upload placeholder state.',
+        transient: true,
+      },
+    ],
   }),
   mark('italic', 'Italic inline text.'),
   mark('link', 'Hyperlink inline text.', [
     { name: 'href', description: 'Destination URL.', required: true },
     { name: 'target', description: 'Link target.' },
+    { name: 'rel', description: 'Link rel attribute.' },
+    { name: 'class', description: 'Link CSS class.' },
+    { name: 'title', description: 'Link title.' },
+    { name: 'internal', description: 'Whether this is an internal link.' },
   ]),
   node('mathBlock', 'Block mathematical expression.', {
     blockAddressable: false,
@@ -188,7 +251,10 @@ export const richContentCapabilities = [
   }),
   node('orderedList', 'Numbered list.', {
     blockAddressable: false,
-    attributes: [],
+    attributes: [
+      { name: 'start', description: 'Starting list number.' },
+      { name: 'type', description: 'List marker type.' },
+    ],
   }),
   node('pageBreak', 'Page break for print and export.', {
     blockAddressable: false,
@@ -202,11 +268,25 @@ export const richContentCapabilities = [
         description: 'Persistent block identifier.',
         required: true,
       },
+      { name: 'textAlign', description: 'Paragraph text alignment.' },
+      { name: 'indent', description: 'Paragraph indentation level.' },
     ],
   }),
   node('pdf', 'Embedded PDF document.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'PDF URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'PDF URL.', required: true },
+      { name: 'name', description: 'Display file name.' },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
+      { name: 'size', description: 'PDF size in bytes.' },
+      { name: 'width', description: 'PDF width.' },
+      { name: 'height', description: 'PDF height.' },
+      {
+        name: 'placeholder',
+        description: 'Upload placeholder state.',
+        transient: true,
+      },
+    ],
   }),
   node('status', 'Inline status badge.', {
     blockAddressable: false,
@@ -234,7 +314,9 @@ export const richContentCapabilities = [
     blockAddressable: false,
     attributes: [],
   }),
-  mark('textStyle', 'Inline text style container.'),
+  mark('textStyle', 'Inline text style container.', [
+    { name: 'color', description: 'Text color.' },
+  ]),
   node('transclusionReference', 'Reference to reusable page content.', {
     blockAddressable: false,
     attributes: [
@@ -263,11 +345,30 @@ export const richContentCapabilities = [
   mark('underline', 'Underlined inline text.'),
   node('video', 'Embedded video player.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'Video URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'Video URL.', required: true },
+      { name: 'alt', description: 'Video alternative text.' },
+      { name: 'attachmentId', description: 'Stored attachment identifier.' },
+      { name: 'width', description: 'Video width.' },
+      { name: 'height', description: 'Video height.' },
+      { name: 'size', description: 'Video size in bytes.' },
+      { name: 'align', description: 'Video alignment.' },
+      { name: 'aspectRatio', description: 'Video aspect ratio.' },
+      {
+        name: 'placeholder',
+        description: 'Upload placeholder state.',
+        transient: true,
+      },
+    ],
   }),
   node('youtube', 'YouTube video embed.', {
     blockAddressable: false,
-    attributes: [{ name: 'src', description: 'YouTube URL.', required: true }],
+    attributes: [
+      { name: 'src', description: 'YouTube URL.', required: true },
+      { name: 'width', description: 'Embed width.' },
+      { name: 'height', description: 'Embed height.' },
+      { name: 'start', description: 'Playback start time in seconds.' },
+    ],
   }),
 ] as const satisfies readonly RichContentCapability[];
 

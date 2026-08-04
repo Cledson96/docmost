@@ -160,6 +160,53 @@ describe('rich content capabilities', () => {
     expect(pendingKey?.transient).toBe(true);
   });
 
+  it('describes every attribute exposed by each public TipTap type', () => {
+    const schema = getSchema(tiptapExtensions);
+    const mismatches: Array<{ name: string; attributes: string[] }> = [];
+
+    for (const capability of richContentCapabilities) {
+      const schemaType =
+        capability.category === 'node'
+          ? schema.nodes[capability.name]
+          : schema.marks[capability.name];
+      const contractAttributes = capability.attributes
+        .map((attribute) => attribute.name)
+        .sort();
+
+      const schemaAttributes = Object.keys(schemaType.spec.attrs ?? {}).sort();
+
+      if (
+        JSON.stringify(contractAttributes) !== JSON.stringify(schemaAttributes)
+      ) {
+        mismatches.push({
+          name: capability.name,
+          attributes: schemaAttributes,
+        });
+      }
+    }
+
+    expect(mismatches).toEqual([]);
+  });
+
+  it('labels known upload and pending attributes as transient', () => {
+    const transientAttributes = richContentCapabilities.flatMap((capability) =>
+      capability.attributes
+        .filter((attribute) => attribute.transient)
+        .map((attribute) => `${capability.name}.${attribute.name}`),
+    );
+
+    expect(transientAttributes.sort()).toEqual(
+      [
+        'attachment.placeholder',
+        'audio.placeholder',
+        'base.pendingKey',
+        'image.placeholder',
+        'pdf.placeholder',
+        'video.placeholder',
+      ].sort(),
+    );
+  });
+
   it('registers every agent-addressable type as a schema node, never a mark', () => {
     const schema = getSchema(tiptapExtensions);
 
