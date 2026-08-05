@@ -3,10 +3,11 @@ import { Helmet } from "react-helmet-async";
 import { useTranslation } from "react-i18next";
 import { useSharePageQuery } from "@/features/share/queries/share-query.ts";
 import { Button, Container } from "@mantine/core";
-import React, { useEffect } from "react";
+import { useEffect } from "react";
 import { extractPageSlugId } from "@/lib";
 import { Error404 } from "@/components/ui/error-404.tsx";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
+import ReadonlyPageEditor from "@/features/editor/readonly-page-editor.tsx";
 import ShareBranding from "@/features/share/components/share-branding.tsx";
 import { IconAlertTriangle } from "@tabler/icons-react";
 import { useAtomValue } from "jotai";
@@ -16,10 +17,6 @@ import {
   sharedTreeDataAtom,
 } from "@/features/share/atoms/shared-page-atom.ts";
 import { isPageInTree } from "@/features/share/utils.ts";
-
-const ReadonlyPageEditor = React.lazy(
-  () => import("@/features/editor/readonly-page-editor.tsx"),
-);
 
 export default function SharedPage() {
   const { t } = useTranslation();
@@ -37,7 +34,6 @@ export default function SharedPage() {
   useEffect(() => {
     if (shareId && data) {
       if (data.share.key !== shareId) {
-
         // Check if the current page is part of the active sharing tree (sidebar) - If we are part of it, we will not redirect, keeping the sidebar visible.
         const isPartOfTree =
           sharedTreeData && isPageInTree(sharedTreeData, data.page.slugId);
@@ -89,17 +85,13 @@ export default function SharedPage() {
             />
           )}
         >
-          <React.Suspense
-            fallback={<div role="status" aria-label={t("Loading page content")} />}
-          >
-            <ReadonlyPageEditor
-              key={data.page.id}
-              title={data.page.title}
-              content={data.page.content}
-              pageId={data.page.id}
-              shareId={data.share.id}
-            />
-          </React.Suspense>
+          <ReadonlyPageEditor
+            key={data.page.id}
+            title={data.page.title}
+            content={data.page.content}
+            pageId={data.page.id}
+            shareId={data.share.id}
+          />
         </ErrorBoundary>
       </Container>
 
