@@ -9,7 +9,7 @@ import { useTranslation } from "react-i18next";
 import React from "react";
 import { EmptyState } from "@/components/ui/empty-state.tsx";
 import { IconAlertTriangle, IconFileOff } from "@tabler/icons-react";
-import { Button } from "@mantine/core";
+import { Button, Center, Loader } from "@mantine/core";
 import { Link } from "react-router-dom";
 import { ErrorBoundary } from "react-error-boundary";
 import { BaseView } from "@/ee/base/components/base-view";
@@ -68,16 +68,23 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
     isError,
     error,
   } = usePageQuery({ pageId: extractPageSlugId(pageSlug) });
-  const { data: space } = useGetSpaceBySlugQuery(page?.space?.slug);
+  const {
+    data: space,
+    isLoading: isSpaceLoading,
+    refetch: refetchSpace,
+  } = useGetSpaceBySlugQuery(page?.space?.slug);
 
   const hasBases = useHasFeature(Feature.BASES);
   const canEdit = !page?.deletedAt && (page?.permissions?.canEdit ?? false);
   const canComment =
-    canEdit ||
-    (space?.settings?.comments?.allowViewerComments === true);
+    canEdit || space?.settings?.comments?.allowViewerComments === true;
 
   if (isLoading) {
-    return <></>;
+    return (
+      <Center mih={240} aria-label={t("Loading page")}>
+        <Loader size="sm" />
+      </Center>
+    );
   }
 
   if (isError || !page) {
@@ -90,7 +97,13 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
             "This page may have been deleted, moved, or you may not have access.",
           )}
           action={
-            <Button component={Link} to="/home" variant="default" size="sm" mt="xs">
+            <Button
+              component={Link}
+              to="/home"
+              variant="default"
+              size="sm"
+              mt="xs"
+            >
               {t("Go to homepage")}
             </Button>
           }
@@ -98,15 +111,35 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
       );
     }
     return (
-      <EmptyState
-        icon={IconFileOff}
-        title={t("Error fetching page data.")}
-      />
+      <EmptyState icon={IconFileOff} title={t("Error fetching page data.")} />
+    );
+  }
+
+  if (isSpaceLoading) {
+    return (
+      <Center mih={240} aria-label={t("Loading page")}>
+        <Loader size="sm" />
+      </Center>
     );
   }
 
   if (!space) {
-    return <></>;
+    return (
+      <EmptyState
+        icon={IconFileOff}
+        title={t("Error fetching page data.")}
+        action={
+          <Button
+            variant="default"
+            size="sm"
+            mt="xs"
+            onClick={() => refetchSpace()}
+          >
+            {t("Try again")}
+          </Button>
+        }
+      />
+    );
   }
 
   if (page?.isBase) {

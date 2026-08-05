@@ -5,6 +5,7 @@
 - `apps/client/src/main.tsx` é a entrada. Ele instala `BrowserRouter`, Mantine, modais, notificações, React Query, Helmet, PostHog e i18n antes de renderizar `App`.
 - `apps/client/src/App.tsx` é o mapa de rotas. Páginas ficam em `src/pages`; layouts globais e de compartilhamento agrupam rotas privadas e públicas. As páginas de rota usam `React.lazy` com uma única fronteira compartilhada de `Suspense`; layouts e a infraestrutura de roteamento permanecem eager.
 - Os módulos de rota de workspace e páginas compartilhadas mantêm eager o comportamento de query, erro e metadados, mas adiam `FullEditor`, o histórico da página e `ReadonlyPageEditor` até que os dados resolvidos exijam a renderização do conteúdo. Dentro de `FullEditor`, `PageEditor` (Yjs/Hocuspocus) só é carregado para edição ou comentários inline, que exigem seleções relativas Yjs; leitores sem essas permissões usam `ReadonlyPageEditor` sem conexão de colaboração. Falhas de chunks lazy se recuperam com ações de recarregamento.
+- `pages/page/page.tsx` sempre mostra um estado de carregamento enquanto a página ou seu space estão sendo resolvidos; uma falha do space mostra uma ação de nova tentativa em vez de retornar uma rota vazia.
 - O alias `@/` aponta para `apps/client/src` em TypeScript, Vite e Vitest. Use-o para imports dentro do app, seguindo os caminhos já adotados pela área modificada.
 
 ## Organização Por Feature

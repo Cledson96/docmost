@@ -5,6 +5,11 @@ import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 import App from "./App";
 
+const { usePageQueryMock, useGetSpaceBySlugQueryMock } = vi.hoisted(() => ({
+  usePageQueryMock: vi.fn(),
+  useGetSpaceBySlugQueryMock: vi.fn(),
+}));
+
 vi.mock("@/hooks/use-track-origin", () => ({ useTrackOrigin: vi.fn() }));
 vi.mock("@/ee/hooks/use-redirect-to-cloud-select.tsx", () => ({
   useRedirectToCloudSelect: vi.fn(),
@@ -32,25 +37,27 @@ vi.mock("@/components/layouts/global/layout.tsx", async () => {
   return { default: () => <Outlet /> };
 });
 vi.mock("@/features/page/queries/page-query", () => ({
-  usePageQuery: () => ({
-    data: {
-      id: "page-id",
-      title: "Workspace page",
-      content: {},
-      slugId: "page-id",
-      space: { slug: "workspace" },
-      permissions: { canEdit: true },
-      isBase: false,
-    },
-    isLoading: false,
-    isError: false,
-  }),
+  usePageQuery: usePageQueryMock,
 }));
+usePageQueryMock.mockReturnValue({
+  data: {
+    id: "page-id",
+    title: "Workspace page",
+    content: {},
+    slugId: "page-id",
+    space: { slug: "workspace" },
+    permissions: { canEdit: true },
+    isBase: false,
+  },
+  isLoading: false,
+  isError: false,
+});
 vi.mock("@/features/space/queries/space-query", () => ({
-  useGetSpaceBySlugQuery: () => ({
-    data: { settings: { comments: { allowViewerComments: false } } },
-  }),
+  useGetSpaceBySlugQuery: useGetSpaceBySlugQueryMock,
 }));
+useGetSpaceBySlugQueryMock.mockReturnValue({
+  data: { settings: { comments: { allowViewerComments: false } } },
+});
 vi.mock("@/features/editor/title-editor", () => ({
   TitleEditor: () => null,
 }));
@@ -159,4 +166,44 @@ it("loads the readonly editor for a shared page route", async () => {
   );
 
   expect(await screen.findByTestId("readonly-page-editor")).toBeTruthy();
+});
+
+it("shows a page loading state instead of a blank route", async () => {
+  usePageQueryMock.mockReturnValueOnce({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/s/workspace/p/workspace-page-id"]}>
+      <MantineProvider>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </MantineProvider>
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByLabelText("Loading page")).toBeTruthy();
+});
+
+it("shows a page loading state while its space is loading", async () => {
+  useGetSpaceBySlugQueryMock.mockReturnValueOnce({
+    data: undefined,
+    isLoading: true,
+    isError: false,
+  });
+
+  render(
+    <MemoryRouter initialEntries={["/s/workspace/p/workspace-page-id"]}>
+      <MantineProvider>
+        <HelmetProvider>
+          <App />
+        </HelmetProvider>
+      </MantineProvider>
+    </MemoryRouter>,
+  );
+
+  expect(await screen.findByLabelText("Loading page")).toBeTruthy();
 });

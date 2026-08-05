@@ -14,6 +14,7 @@
 - `tools/call` retorna conteúdo textual JSON para resultados. Erros de ferramenta retornam `result.isError: true`; método desconhecido usa erro JSON-RPC `-32601`.
 - `getToolsList()` em `mcp.service.ts` é a fonte de verdade. A lista exibida em `apps/client/src/ee/ai/components/mcp-settings.tsx` é apenas um resumo e pode não conter todas as ferramentas.
 - `get_content_capabilities` é uma ferramenta MCP estável e sem argumentos para descobrir os blocos e marks ricos suportados. Ela retorna `{ capabilities }` a partir de `core/rich-content/rich-content-capabilities.ts`, em um snapshot serializável; `RichContentCapabilitiesService` apenas acrescenta ao atributo `embed.provider` os IDs atuais de `embedProviders` em `packages/editor-ext`.
+- `RichContentModule` importa `CollaborationModule` diretamente porque `BlockEditService` injeta `CollaborationGateway`; importar ambos apenas em `McpModule` não compartilha providers entre módulos irmãos no Nest.
 - `apps/server/src/core/rich-content/rich-content-capabilities.ts` mantém o contrato compartilhado para futura descoberta de conteúdo rico pelo MCP: ele lista as capacidades públicas do schema TipTap, exclui o mark interno `comment` e expõe a sintaxe Agent Markdown de cada tipo. A classificação `standard`, `block-directive` e `inline-directive` é definida em `packages/editor-ext/src/lib/markdown/agent-markdown-syntax.ts`, também usada pelo codec reversível do editor.
 
 ## Recursos Expostos
