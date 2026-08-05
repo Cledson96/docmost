@@ -27,14 +27,10 @@ import { DeletedPageBanner } from "@/features/page/trash/components/deleted-page
 import clsx from "clsx";
 import { currentPageEditModeAtom } from "@/features/editor/atoms/editor-atoms.ts";
 import { EmptyPageGetStarted } from "@/features/editor/components/empty-page/empty-page-get-started";
+import { CollaborativePageEditor } from "@/features/editor/components/collaborative-page-editor";
 
 const MemoizedTitleEditor = React.memo(TitleEditor);
-const LazyPageEditor = React.lazy(() =>
-  import("@/features/editor/page-editor").then(({ default: PageEditor }) => ({
-    default: PageEditor,
-  })),
-);
-const MemoizedPageEditor = React.memo(LazyPageEditor);
+const MemoizedCollaborativePageEditor = React.memo(CollaborativePageEditor);
 const MemoizedReadonlyPageEditor = React.memo(ReadonlyPageEditor);
 const MemoizedFixedToolbar = React.memo(FixedToolbar);
 const MemoizedDeletedPageBanner = React.memo(DeletedPageBanner);
@@ -89,8 +85,7 @@ export function FullEditor({
     PageEditMode.Edit;
   // Inline comments need PageEditor's synced Yjs binding to create relative
   // selections, so commenters retain the collaborative editor in View mode.
-  const needsCollaborativeEditor =
-    canComment || (editable && isEditMode);
+  const needsCollaborativeEditor = canComment || (editable && isEditMode);
 
   // Apply the user's saved preference only once on initial load, not on every
   // page navigation — so the mode sticks across navigations within a session.
@@ -125,15 +120,16 @@ export function FullEditor({
         readOnly={!editable}
       />
       {needsCollaborativeEditor ? (
-        <React.Suspense fallback={null}>
-          <MemoizedPageEditor
+        <>
+          <MemoizedCollaborativePageEditor
             pageId={pageId}
+            title={title}
             editable={editable}
             content={content}
             canComment={canComment}
           />
           <EmptyPageGetStarted pageId={pageId} editable={editable} />
-        </React.Suspense>
+        </>
       ) : (
         <MemoizedReadonlyPageEditor
           title={title}
