@@ -5,9 +5,16 @@ import { MemoryRouter } from "react-router-dom";
 import { vi } from "vitest";
 import App from "./App";
 
-const { usePageQueryMock, useGetSpaceBySlugQueryMock } = vi.hoisted(() => ({
+const {
+  usePageQueryMock,
+  useGetSpaceBySlugQueryMock,
+  suspendHistoryModalMock,
+  pendingHistoryModalPromise,
+} = vi.hoisted(() => ({
   usePageQueryMock: vi.fn(),
   useGetSpaceBySlugQueryMock: vi.fn(),
+  suspendHistoryModalMock: { current: false },
+  pendingHistoryModalPromise: new Promise<never>(() => undefined),
 }));
 
 vi.mock("@/hooks/use-track-origin", () => ({ useTrackOrigin: vi.fn() }));
@@ -84,7 +91,13 @@ vi.mock("@/features/share/components/share-layout.tsx", async () => {
   return { default: () => <Outlet /> };
 });
 vi.mock("@/features/page-history/components/history-modal", () => ({
-  default: () => null,
+  default: () => {
+    if (suspendHistoryModalMock.current) {
+      throw pendingHistoryModalPromise;
+    }
+
+    return null;
+  },
 }));
 vi.mock("@/features/page/components/header/page-header.tsx", () => ({
   default: () => null,
@@ -206,4 +219,24 @@ it("shows a page loading state while its space is loading", async () => {
   );
 
   expect(await screen.findByLabelText("Loading page")).toBeTruthy();
+});
+
+it("keeps the full editor visible while page history is suspended", async () => {
+  suspendHistoryModalMock.current = true;
+
+  try {
+    render(
+      <MemoryRouter initialEntries={["/s/workspace/p/workspace-page-id"]}>
+        <MantineProvider>
+          <HelmetProvider>
+            <App />
+          </HelmetProvider>
+        </MantineProvider>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByTestId("full-editor")).toBeTruthy();
+  } finally {
+    suspendHistoryModalMock.current = false;
+  }
 });

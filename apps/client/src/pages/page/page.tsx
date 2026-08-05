@@ -16,16 +16,12 @@ import { BaseView } from "@/ee/base/components/base-view";
 import { useHasFeature } from "@/ee/hooks/use-feature";
 import { Feature } from "@/ee/features";
 import { getPageTitle } from "@/features/page/page.utils";
+import { FullEditor } from "@/features/editor/full-editor";
 
-const LazyFullEditor = React.lazy(async () => {
-  const { FullEditor } = await import("@/features/editor/full-editor");
-
-  return { default: FullEditor };
-});
 const LazyHistoryModal = React.lazy(
   () => import("@/features/page-history/components/history-modal"),
 );
-const MemoizedFullEditor = React.memo(LazyFullEditor);
+const MemoizedFullEditor = React.memo(FullEditor);
 const MemoizedTitleEditor = React.memo(TitleEditor);
 const MemoizedPageHeader = React.memo(PageHeader);
 const MemoizedHistoryModal = React.memo(LazyHistoryModal);
@@ -210,25 +206,19 @@ function PageContent({ pageSlug }: { pageSlug: string | undefined }) {
 
         <MemoizedPageHeader readOnly={!canEdit} />
 
-        <React.Suspense
-          fallback={
-            <div aria-label={t("Loading page content")}>
-              {t("Loading page content")}
-            </div>
-          }
-        >
-          <MemoizedFullEditor
-            key={page.id}
-            pageId={page.id}
-            title={page.title}
-            content={page.content}
-            slugId={page.slugId}
-            spaceSlug={page?.space?.slug}
-            editable={canEdit}
-            creator={page.creator}
-            contributors={page.contributors}
-            canComment={canComment}
-          />
+        <MemoizedFullEditor
+          key={page.id}
+          pageId={page.id}
+          title={page.title}
+          content={page.content}
+          slugId={page.slugId}
+          spaceSlug={page?.space?.slug}
+          editable={canEdit}
+          creator={page.creator}
+          contributors={page.contributors}
+          canComment={canComment}
+        />
+        <React.Suspense fallback={null}>
           <MemoizedHistoryModal pageId={page.id} />
         </React.Suspense>
       </div>
